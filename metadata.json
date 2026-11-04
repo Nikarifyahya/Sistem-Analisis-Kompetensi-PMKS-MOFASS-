@@ -1,0 +1,6 @@
+{
+  "name": "Sistem Analisis Kompetensi PMKS (MOFASS)",
+  "description": "Sistem diagnostik tahap kompetensi perniagaan PMKS berasaskan kerangka MOFASS dengan analisis pintar pembelajaran mesin dan pelan strategi pertumbuhan tersuai.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

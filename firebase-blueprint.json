@@ -1,0 +1,158 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account and profile information",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID"
+        },
+        "fullName": {
+          "type": "string",
+          "description": "Full name of the user"
+        },
+        "email": {
+          "type": "string",
+          "description": "User email address"
+        },
+        "role": {
+          "type": "string",
+          "description": "Designation or title in company"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact number"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp string"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp string"
+        }
+      },
+      "required": ["userId", "fullName", "email"]
+    },
+    "CompanyProfile": {
+      "title": "CompanyProfile",
+      "description": "Company registration and business background",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID"
+        },
+        "companyName": {
+          "type": "string",
+          "description": "Registered company name"
+        },
+        "registrationNumber": {
+          "type": "string",
+          "description": "SSM registration number"
+        },
+        "sector": {
+          "type": "string",
+          "description": "Business sector (Pembuatan, Perkhidmatan, etc.)"
+        },
+        "businessSize": {
+          "type": "string",
+          "description": "Micro, Small, Medium"
+        },
+        "yearsInOperation": {
+          "type": "number",
+          "description": "Years operating"
+        },
+        "annualTurnover": {
+          "type": "string",
+          "description": "Estimated annual revenue"
+        },
+        "employeeCount": {
+          "type": "number",
+          "description": "Total employees"
+        },
+        "state": {
+          "type": "string",
+          "description": "State in Malaysia"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["userId", "companyName", "sector", "businessSize"]
+    },
+    "Assessment": {
+      "title": "Assessment",
+      "description": "MOFASS Competency Assessment Record",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique assessment ID"
+        },
+        "userId": {
+          "type": "string",
+          "description": "User UID who took the assessment"
+        },
+        "companyName": {
+          "type": "string",
+          "description": "Name of the business evaluated"
+        },
+        "totalScore": {
+          "type": "number",
+          "description": "Total score out of 300"
+        },
+        "percentage": {
+          "type": "number",
+          "description": "Total score percentage 0-100"
+        },
+        "maturityLevel": {
+          "type": "string",
+          "description": "Tahap 1, 2, 3, or 4"
+        },
+        "categoryScores": {
+          "type": "object",
+          "description": "Scores breakdown for M, O, F, A, S, S"
+        },
+        "answers": {
+          "type": "object",
+          "description": "Map of question ID to Likert rating 1-5"
+        },
+        "aiInsights": {
+          "type": "object",
+          "description": "Machine learning and AI generated recommendations"
+        },
+        "status": {
+          "type": "string",
+          "description": "draft or completed"
+        },
+        "completedAt": {
+          "type": "string",
+          "description": "Completion ISO date string"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation ISO date string"
+        }
+      },
+      "required": ["userId", "companyName", "totalScore", "percentage", "maturityLevel"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Registered user profile information"
+    },
+    "/companies/{companyId}": {
+      "schema": "CompanyProfile",
+      "description": "Registered business details"
+    },
+    "/assessments/{assessmentId}": {
+      "schema": "Assessment",
+      "description": "Evaluations and diagnostic scores"
+    }
+  }
+}
