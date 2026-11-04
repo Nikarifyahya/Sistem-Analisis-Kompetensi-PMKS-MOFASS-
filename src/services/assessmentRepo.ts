@@ -6,11 +6,13 @@ import {
   query, 
   where, 
   getDocs, 
-  orderBy 
+  orderBy,
+  deleteDoc 
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase/config';
 import { UserProfile, CompanyProfile, AssessmentResult } from '../types';
 import { ensureCompleteAssessment } from '../utils/mlEngine';
+import { MOFASS_CATEGORIES } from '../data/mofassQuestions';
 
 const LOCAL_STORAGE_KEY_USER = 'mofass_user_profile';
 const LOCAL_STORAGE_KEY_COMPANY = 'mofass_company_profile';
@@ -163,4 +165,89 @@ export function getDraftAnswers(): Record<string, number> | null {
     }
   }
   return null;
+}
+
+export async function getAllAssessmentsAdmin(): Promise<AssessmentResult[]> {
+  const combinedMap = new Map<string, AssessmentResult>();
+
+  // 1. Try reading from Firestore
+  try {
+    const colRef = collection(db, 'assessments');
+    const snap = await getDocs(colRef);
+    if (!snap.empty) {
+      snap.forEach((docSnap) => {
+        const data = docSnap.data() as AssessmentResult;
+        if (data && data.id) {
+          combinedMap.set(data.id, ensureCompleteAssessment(data));
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('Firestore admin fetch failed or restricted, reading local cache:', err);
+  }
+
+  // 2. Read from LocalStorage cache
+  try {
+    const localStr = localStorage.getItem(LOCAL_STORAGE_KEY_ASSESSMENTS);
+    if (localStr) {
+      const localList: AssessmentResult[] = JSON.parse(localStr);
+      localList.forEach((a) => {
+        if (!combinedMap.has(a.id)) {
+          combinedMap.set(a.id, ensureCompleteAssessment(a));
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('LocalStorage admin fetch error:', e);
+  }
+
+  // If map has items, sort them by createdAt descending
+  if (combinedMap.size > 0) {
+    const resultList = Array.from(combinedMap.values());
+    resultList.sort((a, b) => {
+      const timeA = new Date(a.createdAt || 0).getTime();
+      const timeB = new Date(b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+    return resultList;
+  }
+
+  // If no assessments exist at all, populate with realistic baseline PMKS assessments
+  try {
+    const { getInitialSeedAssessments } = await import('../data/seedAssessments');
+    const seeds = getInitialSeedAssessments();
+    localStorage.setItem(LOCAL_STORAGE_KEY_ASSESSMENTS, JSON.stringify(seeds));
+    return seeds;
+  } catch (err) {
+    console.warn('Failed to load seed assessments:', err);
+    return [];
+  }
+}
+
+export async function deleteAssessmentRecordAdmin(assessmentId: string): Promise<boolean> {
+  let success = false;
+
+  // 1. Delete from Firestore
+  try {
+    const docRef = doc(db, 'assessments', assessmentId);
+    await deleteDoc(docRef);
+    success = true;
+  } catch (error) {
+    console.warn('Firestore delete failed:', error);
+  }
+
+  // 2. Delete from LocalStorage
+  try {
+    const localStr = localStorage.getItem(LOCAL_STORAGE_KEY_ASSESSMENTS);
+    if (localStr) {
+      const localList: AssessmentResult[] = JSON.parse(localStr);
+      const filtered = localList.filter((a) => a.id !== assessmentId);
+      localStorage.setItem(LOCAL_STORAGE_KEY_ASSESSMENTS, JSON.stringify(filtered));
+      success = true;
+    }
+  } catch (e) {
+    console.warn('LocalStorage delete error:', e);
+  }
+
+  return success;
 }

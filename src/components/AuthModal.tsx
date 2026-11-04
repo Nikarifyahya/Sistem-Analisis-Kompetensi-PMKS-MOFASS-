@@ -600,21 +600,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
           </form>
 
           {/* Quick Domain Guidance Link at footer */}
-          <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
-            <span>Firebase: sistem-kompetensi</span>
-            <button
-              type="button"
-              onClick={() => {
-                setDomainErrorDetails({
-                  currentHostname: currentHost,
-                  vercelHostname: targetVercelHost
-                });
-              }}
-              className="text-slate-500 hover:text-indigo-600 transition inline-flex items-center gap-1 font-medium"
-            >
-              <Info className="w-3 h-3 text-indigo-500" />
-              <span>Info Domain Vercel</span>
-            </button>
+          <div className="pt-3 border-t border-slate-100 flex flex-col gap-2">
+            <div className="flex items-center justify-between text-[11px] text-slate-400">
+              <span>Firebase: sistem-kompetensi</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setDomainErrorDetails({
+                    currentHostname: currentHost,
+                    vercelHostname: targetVercelHost
+                  });
+                }}
+                className="text-slate-500 hover:text-indigo-600 transition inline-flex items-center gap-1 font-medium"
+              >
+                <Info className="w-3 h-3 text-indigo-500" />
+                <span>Info Domain Vercel</span>
+              </button>
+            </div>
+            
+            <div className="p-2 rounded-lg bg-amber-50/70 border border-amber-200/60 text-[10.5px] text-amber-900 flex items-center justify-between">
+              <span className="flex items-center gap-1.5 font-medium">
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>Akses Pentadbir: <b>nikarifyahya@gmail.com</b></span>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('nikarifyahya@gmail.com');
+                  setIsRegister(false);
+                  setIsForgotPassword(false);
+                }}
+                className="text-[10px] bg-amber-200/60 hover:bg-amber-200 text-amber-900 px-2 py-0.5 rounded font-bold transition"
+              >
+                Isi Emel
+              </button>
+            </div>
           </div>
         </div>
       </div>

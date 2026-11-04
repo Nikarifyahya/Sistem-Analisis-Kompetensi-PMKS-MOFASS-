@@ -19,30 +19,35 @@ service cloud.firestore {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email != null && request.auth.token.email.lower() == 'nikarifyahya@gmail.com';
+    }
+
     // User profiles: users can only read and write their own document
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
-      allow delete: if false;
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) || isAdmin();
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
     }
 
     // Company profiles
     match /companies/{companyId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid);
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && ((resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid) || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     // Assessments
     match /assessments/{assessmentId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid);
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isSignedIn() && ((resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid) || isAdmin());
+      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
     // Connection probe

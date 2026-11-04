@@ -44,12 +44,14 @@ interface DashboardViewProps {
   assessment: AssessmentResult;
   onRetake: () => void;
   onUpdateAssessment?: (updated: AssessmentResult) => void;
+  onBackToAdmin?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   assessment: rawAssessment,
   onRetake,
-  onUpdateAssessment
+  onUpdateAssessment,
+  onBackToAdmin
 }) => {
   const assessment = ensureCompleteAssessment(rawAssessment);
   const [activeTab, setActiveTab] = useState<'overview' | 'industry' | 'roadmap' | 'swot' | 'simulator' | 'grants' | 'report'>('overview');
@@ -233,6 +235,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {onBackToAdmin && (
+              <button
+                onClick={onBackToAdmin}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold transition shadow-xs active:scale-95"
+                title="Kembali ke Panel Pengurusan Pentadbir"
+              >
+                <span>← Kembali ke Panel Pentadbir</span>
+              </button>
+            )}
             <button
               onClick={() => {
                 setActiveTab('industry');

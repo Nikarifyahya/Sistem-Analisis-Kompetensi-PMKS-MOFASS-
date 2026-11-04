@@ -23,6 +23,7 @@ import { CompanyProfileForm } from './components/CompanyProfileForm';
 import { AssessmentWizard } from './components/AssessmentWizard';
 import { DashboardView } from './components/DashboardView';
 import { HistoryModal } from './components/HistoryModal';
+import { AdminPortal } from './components/AdminPortal';
 import { 
   Building2, 
   Sparkles, 
@@ -44,7 +45,7 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState<boolean>(false);
   
-  const [activeTab, setActiveTab] = useState<'profile' | 'assessment' | 'dashboard' | 'history'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'assessment' | 'dashboard' | 'history' | 'admin'>('profile');
   const [currentAssessment, setCurrentAssessment] = useState<AssessmentResult | null>(null);
   const [pastAssessments, setPastAssessments] = useState<AssessmentResult[]>([]);
   const [draftAnswers, setDraftAnswers] = useState<Record<string, number>>({});
@@ -65,7 +66,7 @@ export default function App() {
           isDemo: false
         };
         setUser(profile);
-        await loadUserData(profile.uid);
+        await loadUserData(profile.uid, profile.email);
       } else {
         // Check for local stored demo user
         const localUserStr = localStorage.getItem('mofass_user_profile');
@@ -73,7 +74,7 @@ export default function App() {
           try {
             const parsed = JSON.parse(localUserStr);
             setUser(parsed);
-            await loadUserData(parsed.uid);
+            await loadUserData(parsed.uid, parsed.email);
           } catch {
             setUser(null);
           }
@@ -90,7 +91,7 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const loadUserData = async (uid: string) => {
+  const loadUserData = async (uid: string, userEmail?: string) => {
     try {
       const comp = await getCompanyProfile(uid);
       if (comp) {
@@ -99,7 +100,11 @@ export default function App() {
       const history = await getUserAssessments(uid);
       const sanitizedHistory = history.map(ensureCompleteAssessment);
       setPastAssessments(sanitizedHistory);
-      if (sanitizedHistory.length > 0) {
+
+      const email = (userEmail || user?.email || '').toLowerCase().trim();
+      if (email === 'nikarifyahya@gmail.com') {
+        setActiveTab('admin');
+      } else if (sanitizedHistory.length > 0) {
         setCurrentAssessment(sanitizedHistory[0]);
         setActiveTab('dashboard');
       } else if (comp) {
@@ -113,7 +118,7 @@ export default function App() {
   const handleAuthSuccess = async (authedUser: UserProfile) => {
     setUser(authedUser);
     await saveUserProfile(authedUser);
-    await loadUserData(authedUser.uid);
+    await loadUserData(authedUser.uid, authedUser.email);
   };
 
   const handleSignOut = () => {
@@ -269,6 +274,20 @@ export default function App() {
               </div>
             </div>
           </div>
+        ) : activeTab === 'admin' ? (
+          /* Step Admin: Executive Analytics & Reports Registry */
+          <AdminPortal
+            user={user}
+            onViewAssessment={(selected) => {
+              setCurrentAssessment(selected);
+              setActiveTab('dashboard');
+            }}
+            onBackToApp={() => {
+              if (currentAssessment) setActiveTab('dashboard');
+              else if (company) setActiveTab('assessment');
+              else setActiveTab('profile');
+            }}
+          />
         ) : !company || activeTab === 'profile' ? (
           /* Step 1: Company & Profile Setup */
           <CompanyProfileForm
@@ -289,6 +308,7 @@ export default function App() {
           <DashboardView
             assessment={currentAssessment}
             onRetake={() => setActiveTab('assessment')}
+            onBackToAdmin={user?.email?.toLowerCase().trim() === 'nikarifyahya@gmail.com' ? () => setActiveTab('admin') : undefined}
             onUpdateAssessment={async (updated) => {
               const sanitized = ensureCompleteAssessment(updated);
               setCurrentAssessment(sanitized);

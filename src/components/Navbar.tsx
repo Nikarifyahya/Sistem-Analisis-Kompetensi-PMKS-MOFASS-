@@ -15,8 +15,8 @@ import { UserProfile, CompanyProfile } from '../types';
 interface NavbarProps {
   user: UserProfile | null;
   company: CompanyProfile | null;
-  activeTab: 'profile' | 'assessment' | 'dashboard' | 'history';
-  onSelectTab: (tab: 'profile' | 'assessment' | 'dashboard' | 'history') => void;
+  activeTab: 'profile' | 'assessment' | 'dashboard' | 'history' | 'admin';
+  onSelectTab: (tab: 'profile' | 'assessment' | 'dashboard' | 'history' | 'admin') => void;
   onOpenAuth: () => void;
   onSignOut: () => void;
   hasAssessment: boolean;
@@ -33,6 +33,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   hasAssessment,
   onStartNewAssessment
 }) => {
+  const isAdmin = user?.email?.toLowerCase().trim() === 'nikarifyahya@gmail.com';
+
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -52,9 +54,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200">
                   MOFASS PMKS
                 </span>
-                <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
-                  <ShieldCheck className="w-3 h-3 text-emerald-600" /> Firebase Auth
-                </span>
+                {isAdmin ? (
+                  <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-bold bg-amber-50 text-amber-800 px-2 py-0.5 rounded-full border border-amber-300">
+                    <ShieldCheck className="w-3 h-3 text-amber-600" /> Admin
+                  </span>
+                ) : (
+                  <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <ShieldCheck className="w-3 h-3 text-emerald-600" /> Firebase Auth
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 hidden md:block">
                 Sistem Analisis Tahap Kompetensi & Strategi Pertumbuhan Pintar
@@ -115,6 +123,20 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <History className="w-3.5 h-3.5" />
                 Rekod Penilaian
               </button>
+
+              {isAdmin && (
+                <button
+                  onClick={() => onSelectTab('admin')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    activeTab === 'admin'
+                      ? 'bg-amber-400 text-slate-950 shadow-sm'
+                      : 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200'
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                  Panel Admin
+                </button>
+              )}
             </nav>
           )}
 
@@ -197,6 +219,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             <History className="w-3.5 h-3.5" />
             Sejarah
           </button>
+          {isAdmin && (
+            <button
+              onClick={() => onSelectTab('admin')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold whitespace-nowrap ${
+                activeTab === 'admin' ? 'bg-amber-400 text-slate-950 font-extrabold shadow-xs' : 'text-amber-800 bg-amber-100/60'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+              Admin
+            </button>
+          )}
         </div>
       )}
     </header>
