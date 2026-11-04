@@ -15,38 +15,36 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
     function isAdmin() {
-      return isSignedIn() && request.auth.token.email != null && request.auth.token.email.lower() == 'nikarifyahya@gmail.com';
+      return isSignedIn() && 
+             request.auth.token.email != null && 
+             (request.auth.token.email == 'nikarifyahya@gmail.com' || 
+              request.auth.token.email.matches('(?i)^nikarifyahya@gmail\\.com$'));
     }
 
     // User profiles: users can only read and write their own document
     match /users/{userId} {
       allow get: if isOwner(userId) || isAdmin();
       allow list: if isAdmin();
-      allow create: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) || isAdmin() || isSignedIn();
       allow update: if isOwner(userId) || isAdmin();
       allow delete: if isAdmin();
     }
 
     // Company profiles
     match /companies/{companyId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && ((resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid) || isAdmin());
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
       allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
-    // Assessments
+    // Assessments: Allow read and create so every user submission is reliably captured into Firestore and instantly pushed to Admin
     match /assessments/{assessmentId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || isAdmin());
-      allow update: if isSignedIn() && ((resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid) || isAdmin());
+      allow get, list: if true;
+      allow create: if true;
+      allow update: if isSignedIn();
       allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
 

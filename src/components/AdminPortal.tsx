@@ -32,7 +32,11 @@ import {
   Info
 } from 'lucide-react';
 import { AssessmentResult, UserProfile, MofassCategoryId } from '../types';
-import { getAllAssessmentsAdmin, deleteAssessmentRecordAdmin } from '../services/assessmentRepo';
+import { 
+  getAllAssessmentsAdmin, 
+  deleteAssessmentRecordAdmin,
+  subscribeAllAssessmentsAdmin 
+} from '../services/assessmentRepo';
 import { generateProfessionalPDF } from '../utils/pdfGenerator';
 import { MOFASS_CATEGORIES } from '../data/mofassQuestions';
 
@@ -74,6 +78,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const isAdmin = user?.email?.toLowerCase().trim() === ADMIN_EMAIL.toLowerCase().trim();
+  const prevCountRef = React.useRef<number | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -88,9 +93,23 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   };
 
   useEffect(() => {
-    if (isAdmin) {
-      loadData();
-    }
+    if (!isAdmin) return;
+
+    setLoading(true);
+    // Realtime Firestore onSnapshot + in-browser live subscription
+    const unsubscribe = subscribeAllAssessmentsAdmin((updatedList) => {
+      if (prevCountRef.current !== null && updatedList.length > prevCountRef.current) {
+        const latest = updatedList[0];
+        showToast(`Laporan baharu diterima: ${latest.companyProfile?.companyName || 'Syarikat PMKS'} (${latest.id})!`, 'success');
+      }
+      prevCountRef.current = updatedList.length;
+      setAssessments(updatedList);
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [isAdmin]);
 
   // Flash action message

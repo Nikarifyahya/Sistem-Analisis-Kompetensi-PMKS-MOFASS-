@@ -7,7 +7,8 @@ import {
   where, 
   getDocs, 
   orderBy,
-  deleteDoc 
+  deleteDoc,
+  onSnapshot 
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase/config';
 import { UserProfile, CompanyProfile, AssessmentResult } from '../types';
@@ -98,29 +99,38 @@ export async function getCompanyProfile(userId: string): Promise<CompanyProfile 
 
 export async function saveAssessmentRecord(rawAssessment: AssessmentResult): Promise<void> {
   const assessment = ensureCompleteAssessment(rawAssessment);
-  // Save to local storage list
+
+  // 1. Save to local storage list
   try {
     const existingStr = localStorage.getItem(LOCAL_STORAGE_KEY_ASSESSMENTS);
     const existingList: AssessmentResult[] = existingStr ? JSON.parse(existingStr) : [];
     const filtered = existingList.filter((a) => a.id !== assessment.id);
     filtered.unshift(assessment);
-    localStorage.setItem(LOCAL_STORAGE_KEY_ASSESSMENTS, JSON.stringify(filtered.slice(0, 20)));
+    localStorage.setItem(LOCAL_STORAGE_KEY_ASSESSMENTS, JSON.stringify(filtered.slice(0, 100)));
   } catch (e) {
     console.warn('LocalStorage save error:', e);
   }
 
-  // Clear draft
+  // 2. Clear active draft
   localStorage.removeItem(LOCAL_STORAGE_KEY_DRAFT);
 
-  // Save to Firestore
+  // 3. Dispatch in-browser event so open Admin views receive the update instantly
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('mofass_assessment_submitted', { detail: assessment }));
+  }
+
+  // 4. Save to Firestore (Real-time backend)
   try {
     const docRef = doc(db, 'assessments', assessment.id);
     await setDoc(docRef, {
       ...assessment,
       userId: assessment.userId,
+      userEmail: assessment.userEmail || assessment.userProfile?.email || '',
       updatedAt: new Date().toISOString()
     });
+    console.log('Berjaya simpan penilaian ke Firestore:', assessment.id);
   } catch (error) {
+    console.error('Ralat simpan ke Firestore:', error);
     handleFirestoreError(error, OperationType.WRITE, `assessments/${assessment.id}`);
   }
 }
@@ -250,4 +260,97 @@ export async function deleteAssessmentRecordAdmin(assessmentId: string): Promise
   }
 
   return success;
+}
+
+export function subscribeAllAssessmentsAdmin(
+  onUpdate: (assessments: AssessmentResult[]) => void
+): () => void {
+  // Helper to merge Firestore snapshots and LocalStorage cleanly
+  const mergeAndSort = (firestoreItems: AssessmentResult[]) => {
+    const combinedMap = new Map<string, AssessmentResult>();
+
+    firestoreItems.forEach((a) => {
+      if (a && a.id) {
+        combinedMap.set(a.id, ensureCompleteAssessment(a));
+      }
+    });
+
+    try {
+      const localStr = localStorage.getItem(LOCAL_STORAGE_KEY_ASSESSMENTS);
+      if (localStr) {
+        const localList: AssessmentResult[] = JSON.parse(localStr);
+        localList.forEach((a) => {
+          if (!combinedMap.has(a.id)) {
+            combinedMap.set(a.id, ensureCompleteAssessment(a));
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Local merge warning:', e);
+    }
+
+    const sorted = Array.from(combinedMap.values()).sort((a, b) => {
+      const timeA = new Date(a.createdAt || 0).getTime();
+      const timeB = new Date(b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+
+    return sorted;
+  };
+
+  // 1. Initial immediate push from local + cached database
+  getAllAssessmentsAdmin().then((initialList) => {
+    if (initialList && initialList.length > 0) {
+      onUpdate(initialList);
+    }
+  });
+
+  // 2. Real-time Firestore onSnapshot listener
+  let unsubscribeFirestore = () => {};
+  try {
+    const colRef = collection(db, 'assessments');
+    unsubscribeFirestore = onSnapshot(
+      colRef,
+      (snapshot) => {
+        const items: AssessmentResult[] = [];
+        snapshot.forEach((d) => {
+          const item = d.data() as AssessmentResult;
+          if (item && item.id) {
+            items.push(ensureCompleteAssessment(item));
+          }
+        });
+        const combined = mergeAndSort(items);
+        if (combined.length > 0) {
+          onUpdate(combined);
+        }
+      },
+      (error) => {
+        console.warn('Realtime onSnapshot listener error (falling back to local):', error);
+      }
+    );
+  } catch (err) {
+    console.warn('Could not establish onSnapshot:', err);
+  }
+
+  // 3. In-browser instant event listener (handles when user finishes assessment in same browser/tab)
+  const handleImmediateEvent = (e: any) => {
+    getAllAssessmentsAdmin().then((list) => {
+      if (list && list.length > 0) {
+        onUpdate(list);
+      }
+    });
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('mofass_assessment_submitted', handleImmediateEvent);
+    window.addEventListener('storage', handleImmediateEvent);
+  }
+
+  return () => {
+    unsubscribeFirestore();
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('mofass_assessment_submitted', handleImmediateEvent);
+      window.removeEventListener('storage', handleImmediateEvent);
+    }
+  };
 }
