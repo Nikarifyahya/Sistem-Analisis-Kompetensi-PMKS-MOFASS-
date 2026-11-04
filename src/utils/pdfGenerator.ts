@@ -391,42 +391,29 @@ export async function generateProfessionalPDF(rawAssessment: AssessmentResult): 
   // Box 2.1: Macro Overview & Stage Analysis
   doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
   doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(margin, curY, contentWidth, 38, 3, 3, 'FD');
+  const rawOverview = assessment.industryLandscape?.stageAnalysis
+    ? `${assessment.industryLandscape.sectorOverview.split('.')[0]}. ${assessment.industryLandscape.stageAnalysis}`
+    : (assessment.industryLandscape?.sectorOverview || 'Sektor PMKS di Malaysia memainkan peranan penting dalam memacu ekonomi domestik dan rantaian bekalan.');
+  const sectorOverviewLines = doc.splitTextToSize(rawOverview, contentWidth - 14);
+  const macroBoxHeight = Math.max(34, 13 + (Math.min(5, sectorOverviewLines.length) * 3.8));
+  doc.roundedRect(margin, curY, contentWidth, macroBoxHeight, 3, 3, 'FD');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(accentIndigo[0], accentIndigo[1], accentIndigo[2]);
-  doc.text(`2.1 Gambaran Makro & Analisis Fasa Operasi (${company.yearsInOperation} Tahun Beroperasi):`, margin + 5, curY + 6.5);
+  doc.text(`2.1 Gambaran Makro & Analisis Fasa Operasi (${company.yearsInOperation} Tahun Beroperasi):`, margin + 6, curY + 6.5);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
-  const rawOverview = assessment.industryLandscape?.stageAnalysis
-    ? `${assessment.industryLandscape.sectorOverview.split('.')[0]}. ${assessment.industryLandscape.stageAnalysis}`
-    : (assessment.industryLandscape?.sectorOverview || 'Sektor PMKS di Malaysia memainkan peranan penting dalam memacu ekonomi domestik dan rantaian bekalan.');
-  const sectorOverviewLines = doc.splitTextToSize(rawOverview, contentWidth - 10);
-  doc.text(sectorOverviewLines.slice(0, 5), margin + 5, curY + 12);
+  doc.text(sectorOverviewLines.slice(0, 5), margin + 6, curY + 12);
 
-  curY += 43;
+  curY += macroBoxHeight + 5;
 
   // Two columns for Trends & Challenges
   const halfColWidth = (contentWidth - 6) / 2;
-  const boxHeight = 56;
+  const colTextWidth = halfColWidth - 14;
 
-  // Box 1: Trends
-  doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(margin, curY, halfColWidth, boxHeight, 3, 3, 'FD');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(accentIndigo[0], accentIndigo[1], accentIndigo[2]);
-  doc.text('Trend Pasaran Semasa di Malaysia:', margin + 4, curY + 7);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
-  let trendY = curY + 13;
   const activeTrends = (assessment.industryLandscape?.marketTrends && assessment.industryLandscape.marketTrends.length > 0)
     ? assessment.industryLandscape.marketTrends
     : [
@@ -434,26 +421,7 @@ export async function generateProfessionalPDF(rawAssessment: AssessmentResult): 
         'Peralihan perbelanjaan korporat & pengguna kepada tawaran nilai telus dan kepuasan masa nyata.',
         'Penekanan ketat kepada pematuhan mandat e-Invois LHDN dan integriti aliran rekod inventori.'
       ];
-  activeTrends.slice(0, 3).forEach((t) => {
-    const lines = doc.splitTextToSize(`• ${t}`, halfColWidth - 8);
-    doc.text(lines, margin + 4, trendY);
-    trendY += (lines.length * 3.6) + 2;
-  });
 
-  // Box 2: Challenges
-  const box2X = margin + halfColWidth + 6;
-  doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
-  doc.roundedRect(box2X, curY, halfColWidth, boxHeight, 3, 3, 'FD');
-
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(accentRose[0], accentRose[1], accentRose[2]);
-  doc.text('Cabaran Utama Pemain Industri:', box2X + 4, curY + 7);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
-  let chalY = curY + 13;
   const activeChallenges = (assessment.industryLandscape?.keyChallenges && assessment.industryLandscape.keyChallenges.length > 0)
     ? assessment.industryLandscape.keyChallenges
     : [
@@ -461,28 +429,67 @@ export async function generateProfessionalPDF(rawAssessment: AssessmentResult): 
         'Kekangan aliran tunai pusingan berpunca daripada tempoh kutipan kredit penghutang yang panjang (>45 hari).',
         'Kesukaran menarik dan mengekalkan bakat berkemahiran teknikal serta ketiadaan SOP bertulis.'
       ];
-  activeChallenges.slice(0, 3).forEach((c) => {
-    const lines = doc.splitTextToSize(`• ${c}`, halfColWidth - 8);
-    doc.text(lines, box2X + 4, chalY);
-    chalY += (lines.length * 3.6) + 2;
+
+  const measuredTrends = activeTrends.slice(0, 3).map((t) => {
+    const clean = t.replace(/^[•✓★\s*-]+/, '').trim();
+    return doc.splitTextToSize(clean, colTextWidth);
   });
+  const totalTrendLines = measuredTrends.reduce((sum, l) => sum + l.length, 0);
 
-  curY += boxHeight + 6;
+  const measuredChallenges = activeChallenges.slice(0, 3).map((c) => {
+    const clean = c.replace(/^[•✓★\s*-]+/, '').trim();
+    return doc.splitTextToSize(clean, colTextWidth);
+  });
+  const totalChalLines = measuredChallenges.reduce((sum, l) => sum + l.length, 0);
 
-  // Box 3: Government Support policies Box
-  doc.setFillColor(240, 253, 244); // Emerald 50
-  doc.setDrawColor(187, 247, 208);
-  doc.roundedRect(margin, curY, contentWidth, 38, 3, 3, 'FD');
+  const maxLines = Math.max(totalTrendLines, totalChalLines);
+  const boxesHeight = Math.max(50, 13 + (maxLines * 3.8) + 4);
+
+  // Box 1: Trends
+  doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
+  doc.setDrawColor(226, 232, 240);
+  doc.roundedRect(margin, curY, halfColWidth, boxesHeight, 3, 3, 'FD');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(accentTeal[0], accentTeal[1], accentTeal[2]);
-  doc.text('Sokongan Dasar Kerajaan & Peluang Pertumbuhan PMKS:', margin + 4, curY + 7);
+  doc.setFontSize(8.5);
+  doc.setTextColor(accentIndigo[0], accentIndigo[1], accentIndigo[2]);
+  doc.text('Trend Pasaran Semasa di Malaysia:', margin + 5, curY + 6.5);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
-  let govY = curY + 13;
+  let trendY = curY + 12;
+  measuredTrends.forEach((lines) => {
+    doc.setFillColor(accentIndigo[0], accentIndigo[1], accentIndigo[2]);
+    doc.circle(margin + 6, trendY - 1, 0.8, 'F');
+    doc.text(lines, margin + 9, trendY);
+    trendY += (lines.length * 3.8) + 1.8;
+  });
+
+  // Box 2: Challenges
+  const box2X = margin + halfColWidth + 6;
+  doc.setFillColor(bgLight[0], bgLight[1], bgLight[2]);
+  doc.roundedRect(box2X, curY, halfColWidth, boxesHeight, 3, 3, 'FD');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(accentRose[0], accentRose[1], accentRose[2]);
+  doc.text('Cabaran Utama Pemain Industri:', box2X + 5, curY + 6.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
+  let chalY = curY + 12;
+  measuredChallenges.forEach((lines) => {
+    doc.setFillColor(accentRose[0], accentRose[1], accentRose[2]);
+    doc.circle(box2X + 6, chalY - 1, 0.8, 'F');
+    doc.text(lines, box2X + 9, chalY);
+    chalY += (lines.length * 3.8) + 1.8;
+  });
+
+  curY += boxesHeight + 5;
+
+  // Box 3: Government Support policies Box
   const activePolicies = (assessment.industryLandscape?.governmentPolicySupport && assessment.industryLandscape.governmentPolicySupport.length > 0)
     ? assessment.industryLandscape.governmentPolicySupport
     : [
@@ -490,28 +497,38 @@ export async function generateProfessionalPDF(rawAssessment: AssessmentResult): 
         'Inisiatif automasi & pendigitalan pintar PMKS diterajui SME Corp, MDEC, dan KUSKOP.',
         'Skim Jaminan Modal Kerja (WCS) oleh Syarikat Jaminan Pembiayaan Perniagaan (SJPP).'
       ];
-  activePolicies.slice(0, 3).forEach((g) => {
-    const lines = doc.splitTextToSize(`✓ ${g}`, contentWidth - 8);
-    doc.text(lines, margin + 4, govY);
-    govY += (lines.length * 3.6) + 1.5;
+
+  const fullTextWidth = contentWidth - 18;
+  const measuredPolicies = activePolicies.slice(0, 3).map((g) => {
+    const clean = g.replace(/^[•✓★\s*-]+/, '').trim();
+    return doc.splitTextToSize(clean, fullTextWidth);
   });
+  const totalGovLines = measuredPolicies.reduce((acc, l) => acc + l.length, 0);
+  const box3Height = Math.max(36, 13 + (totalGovLines * 3.8) + (measuredPolicies.length * 2.2));
 
-  curY += 44;
-
-  // Box 4: Strategic Growth Drivers
-  doc.setFillColor(240, 249, 255); // Sky 50
-  doc.setDrawColor(186, 230, 253);
-  doc.roundedRect(margin, curY, contentWidth, 38, 3, 3, 'FD');
+  doc.setFillColor(240, 253, 244); // Emerald 50
+  doc.setDrawColor(187, 247, 208);
+  doc.roundedRect(margin, curY, contentWidth, box3Height, 3, 3, 'FD');
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(accentIndigo[0], accentIndigo[1], accentIndigo[2]);
-  doc.text('Faktor Pemangkin Pertumbuhan Strategik Sektor (Growth Drivers):', margin + 4, curY + 7);
+  doc.setFontSize(8.5);
+  doc.setTextColor(accentTeal[0], accentTeal[1], accentTeal[2]);
+  doc.text('Sokongan Dasar Kerajaan & Peluang Pertumbuhan PMKS:', margin + 6, curY + 6.5);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
-  let gdY = curY + 13;
+  let govY = curY + 12;
+  measuredPolicies.forEach((lines) => {
+    doc.setFillColor(accentTeal[0], accentTeal[1], accentTeal[2]);
+    doc.circle(margin + 6, govY - 1, 0.8, 'F');
+    doc.text(lines, margin + 10, govY);
+    govY += (lines.length * 3.8) + 2.2;
+  });
+
+  curY += box3Height + 5;
+
+  // Box 4: Strategic Growth Drivers
   const activeGrowthDrivers = (assessment.industryLandscape?.growthDrivers && assessment.industryLandscape.growthDrivers.length > 0)
     ? assessment.industryLandscape.growthDrivers
     : [
@@ -519,10 +536,32 @@ export async function generateProfessionalPDF(rawAssessment: AssessmentResult): 
         'Potensi penskalaan perniagaan rentas sempadan ke pasaran serantau ASEAN (Indonesia, Filipina, Vietnam).',
         'Automasi proses berulang yang mengurangkan kos operasi seunit sebanyak 15% hingga 25%.'
       ];
-  activeGrowthDrivers.slice(0, 3).forEach((gd) => {
-    const lines = doc.splitTextToSize(`★ ${gd}`, contentWidth - 8);
-    doc.text(lines, margin + 4, gdY);
-    gdY += (lines.length * 3.6) + 1.5;
+
+  const measuredGrowthDrivers = activeGrowthDrivers.slice(0, 3).map((gd) => {
+    const clean = gd.replace(/^[•✓★\s*-]+/, '').trim();
+    return doc.splitTextToSize(clean, fullTextWidth);
+  });
+  const totalGdLines = measuredGrowthDrivers.reduce((acc, l) => acc + l.length, 0);
+  const box4Height = Math.max(36, 13 + (totalGdLines * 3.8) + (measuredGrowthDrivers.length * 2.2));
+
+  doc.setFillColor(240, 249, 255); // Sky 50
+  doc.setDrawColor(186, 230, 253);
+  doc.roundedRect(margin, curY, contentWidth, box4Height, 3, 3, 'FD');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(accentIndigo[0], accentIndigo[1], accentIndigo[2]);
+  doc.text('Faktor Pemangkin Pertumbuhan Strategik Sektor (Growth Drivers):', margin + 6, curY + 6.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
+  let gdY = curY + 12;
+  measuredGrowthDrivers.forEach((lines) => {
+    doc.setFillColor(accentIndigo[0], accentIndigo[1], accentIndigo[2]);
+    doc.circle(margin + 6, gdY - 1, 0.8, 'F');
+    doc.text(lines, margin + 10, gdY);
+    gdY += (lines.length * 3.8) + 2.2;
   });
 
   // =========================================================================
@@ -576,7 +615,10 @@ export async function generateProfessionalPDF(rawAssessment: AssessmentResult): 
     doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
     sc?.keyStrengths.slice(0, 2).forEach((s) => {
       secSubY += 3.8;
-      doc.text(`• ${s}`, margin + 6, secSubY);
+      const cleanS = s.replace(/^[•✓★\s*-]+/, '').trim();
+      doc.setFillColor(accentTeal[0], accentTeal[1], accentTeal[2]);
+      doc.circle(margin + 6, secSubY - 1, 0.7, 'F');
+      doc.text(cleanS, margin + 9, secSubY);
     });
 
     secSubY += 5;
@@ -588,7 +630,10 @@ export async function generateProfessionalPDF(rawAssessment: AssessmentResult): 
     doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
     sc?.keyGaps.slice(0, 2).forEach((g) => {
       secSubY += 3.8;
-      doc.text(`• ${g}`, margin + 6, secSubY);
+      const cleanG = g.replace(/^[•✓★\s*-]+/, '').trim();
+      doc.setFillColor(accentRose[0], accentRose[1], accentRose[2]);
+      doc.circle(margin + 6, secSubY - 1, 0.7, 'F');
+      doc.text(cleanG, margin + 9, secSubY);
     });
 
     secSubY += 5;
@@ -657,7 +702,10 @@ export async function generateProfessionalPDF(rawAssessment: AssessmentResult): 
     doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
     sc?.keyStrengths.slice(0, 2).forEach((s) => {
       secSubY += 3.8;
-      doc.text(`• ${s}`, margin + 6, secSubY);
+      const cleanS = s.replace(/^[•✓★\s*-]+/, '').trim();
+      doc.setFillColor(accentTeal[0], accentTeal[1], accentTeal[2]);
+      doc.circle(margin + 6, secSubY - 1, 0.7, 'F');
+      doc.text(cleanS, margin + 9, secSubY);
     });
 
     secSubY += 5;
@@ -669,7 +717,10 @@ export async function generateProfessionalPDF(rawAssessment: AssessmentResult): 
     doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
     sc?.keyGaps.slice(0, 2).forEach((g) => {
       secSubY += 3.8;
-      doc.text(`• ${g}`, margin + 6, secSubY);
+      const cleanG = g.replace(/^[•✓★\s*-]+/, '').trim();
+      doc.setFillColor(accentRose[0], accentRose[1], accentRose[2]);
+      doc.circle(margin + 6, secSubY - 1, 0.7, 'F');
+      doc.text(cleanG, margin + 9, secSubY);
     });
 
     secSubY += 5;
@@ -763,9 +814,12 @@ export async function generateProfessionalPDF(rawAssessment: AssessmentResult): 
   doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
   let strY = curY + 11;
   assessment.swotAnalysis.strengths.slice(0, 4).forEach((s) => {
-    const lines = doc.splitTextToSize(`• ${s}`, swotBoxWidth - 8);
-    doc.text(lines, margin + 4, strY);
-    strY += (lines.length * 3.4) + 1;
+    const cleanS = s.replace(/^[•✓★\s*-]+/, '').trim();
+    const lines = doc.splitTextToSize(cleanS, swotBoxWidth - 14);
+    doc.setFillColor(accentTeal[0], accentTeal[1], accentTeal[2]);
+    doc.circle(margin + 5, strY - 1, 0.7, 'F');
+    doc.text(lines, margin + 8, strY);
+    strY += (lines.length * 3.4) + 1.2;
   });
 
   // Weaknesses Box
@@ -782,9 +836,12 @@ export async function generateProfessionalPDF(rawAssessment: AssessmentResult): 
   doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
   let weakY = curY + 11;
   assessment.swotAnalysis.weaknesses.slice(0, 4).forEach((w) => {
-    const lines = doc.splitTextToSize(`• ${w}`, swotBoxWidth - 8);
-    doc.text(lines, weakX + 4, weakY);
-    weakY += (lines.length * 3.4) + 1;
+    const cleanW = w.replace(/^[•✓★\s*-]+/, '').trim();
+    const lines = doc.splitTextToSize(cleanW, swotBoxWidth - 14);
+    doc.setFillColor(accentRose[0], accentRose[1], accentRose[2]);
+    doc.circle(weakX + 5, weakY - 1, 0.7, 'F');
+    doc.text(lines, weakX + 8, weakY);
+    weakY += (lines.length * 3.4) + 1.2;
   });
 
   curY += swotBoxHeight + 6;
@@ -802,9 +859,12 @@ export async function generateProfessionalPDF(rawAssessment: AssessmentResult): 
   doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
   let oppY = curY + 11;
   assessment.swotAnalysis.opportunities.slice(0, 4).forEach((o) => {
-    const lines = doc.splitTextToSize(`• ${o}`, swotBoxWidth - 8);
-    doc.text(lines, margin + 4, oppY);
-    oppY += (lines.length * 3.4) + 1;
+    const cleanO = o.replace(/^[•✓★\s*-]+/, '').trim();
+    const lines = doc.splitTextToSize(cleanO, swotBoxWidth - 14);
+    doc.setFillColor(accentIndigo[0], accentIndigo[1], accentIndigo[2]);
+    doc.circle(margin + 5, oppY - 1, 0.7, 'F');
+    doc.text(lines, margin + 8, oppY);
+    oppY += (lines.length * 3.4) + 1.2;
   });
 
   // Threats Box
@@ -820,8 +880,11 @@ export async function generateProfessionalPDF(rawAssessment: AssessmentResult): 
   doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
   let thrY = curY + 11;
   assessment.swotAnalysis.threats.slice(0, 4).forEach((t) => {
-    const lines = doc.splitTextToSize(`• ${t}`, swotBoxWidth - 8);
-    doc.text(lines, weakX + 4, thrY);
+    const cleanT = t.replace(/^[•✓★\s*-]+/, '').trim();
+    const lines = doc.splitTextToSize(cleanT, swotBoxWidth - 14);
+    doc.setFillColor(accentAmber[0], accentAmber[1], accentAmber[2]);
+    doc.circle(weakX + 5, thrY - 1, 0.7, 'F');
+    doc.text(lines, weakX + 8, thrY);
     thrY += (lines.length * 3.4) + 1;
   });
 

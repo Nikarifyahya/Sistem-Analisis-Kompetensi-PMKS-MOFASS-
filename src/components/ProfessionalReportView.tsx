@@ -338,9 +338,9 @@ export const ProfessionalReportView: React.FC<ProfessionalReportViewProps> = ({
 
             {/* 2.5 Government Support & 2.6 Growth Drivers */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/40 text-xs">
+              <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/40 text-xs overflow-hidden break-words">
                 <h4 className="font-bold text-emerald-950 mb-1.5 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" /> 2.5 Sokongan Dasar Kerajaan & Inisiatif PMKS
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" /> 2.5 Sokongan Dasar Kerajaan & Inisiatif PMKS
                 </h4>
                 <ul className="space-y-1.5 text-slate-700">
                   {(assessment.industryLandscape?.governmentPolicySupport?.length ? assessment.industryLandscape.governmentPolicySupport : [
@@ -348,17 +348,17 @@ export const ProfessionalReportView: React.FC<ProfessionalReportViewProps> = ({
                     'Inisiatif automasi & pendigitalan pintar PMKS diterajui SME Corp, MDEC, dan KUSKOP.',
                     'Skim Jaminan Modal Kerja (WCS) oleh Syarikat Jaminan Pembiayaan Perniagaan (SJPP).'
                   ]).map((g, idx) => (
-                    <li key={idx} className="flex items-start gap-1.5">
-                      <span className="text-emerald-600 font-bold">✓</span>
-                      <span>{g}</span>
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 mt-1.5 shrink-0"></span>
+                      <span className="leading-relaxed">{g.replace(/^[•✓★\s*-]+/, '').trim()}</span>
                     </li>
                   ))}
                 </ul>
               </div>
 
-              <div className="p-4 rounded-xl border border-sky-200 bg-sky-50/40 text-xs">
+              <div className="p-4 rounded-xl border border-sky-200 bg-sky-50/40 text-xs overflow-hidden break-words">
                 <h4 className="font-bold text-sky-950 mb-1.5 flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-sky-600" /> 2.6 Pemangkin Pertumbuhan Strategik (Growth Drivers)
+                  <Sparkles className="w-4 h-4 text-sky-600 shrink-0" /> 2.6 Pemangkin Pertumbuhan Strategik (Growth Drivers)
                 </h4>
                 <ul className="space-y-1.5 text-slate-700">
                   {(assessment.industryLandscape?.growthDrivers?.length ? assessment.industryLandscape.growthDrivers : [
@@ -366,9 +366,9 @@ export const ProfessionalReportView: React.FC<ProfessionalReportViewProps> = ({
                     'Potensi penskalaan perniagaan rentas sempadan ke pasaran serantau ASEAN (Indonesia, Filipina, Vietnam).',
                     'Automasi proses berulang yang mengurangkan kos operasi seunit sebanyak 15% hingga 25%.'
                   ]).map((gd, idx) => (
-                    <li key={idx} className="flex items-start gap-1.5">
-                      <span className="text-sky-600 font-bold">★</span>
-                      <span>{gd}</span>
+                    <li key={idx} className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-sky-600 mt-1.5 shrink-0"></span>
+                      <span className="leading-relaxed">{gd.replace(/^[•✓★\s*-]+/, '').trim()}</span>
                     </li>
                   ))}
                 </ul>
