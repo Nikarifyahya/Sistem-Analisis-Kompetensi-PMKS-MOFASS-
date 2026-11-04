@@ -4,13 +4,43 @@ import { AssessmentResult } from '../types';
 import { MOFASS_CATEGORIES } from '../data/mofassQuestions';
 import { ensureCompleteAssessment } from './mlEngine';
 
-export function generateProfessionalPDF(rawAssessment: AssessmentResult): void {
+// Helper to load logo as base64 for jsPDF
+async function loadLogoBase64(): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 400;
+        canvas.height = img.naturalHeight || 220;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(null);
+        // Fill white background for clean rendering
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = '/assets/aistudio/Logo_Impak_Niaga_9f4ce565.png';
+  });
+}
+
+export async function generateProfessionalPDF(rawAssessment: AssessmentResult): Promise<void> {
   const assessment = ensureCompleteAssessment(rawAssessment);
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
     format: 'a4',
   });
+
+  // Pre-load official Impak Niaga logo
+  const logoData = await loadLogoBase64();
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -46,7 +76,7 @@ export function generateProfessionalPDF(rawAssessment: AssessmentResult): void {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     doc.setTextColor(primaryDark[0], primaryDark[1], primaryDark[2]);
-    doc.text('MOFASS PMKS • LAPORAN AUDIT & PELAN TINDAKAN STRATEGIK', margin, 9);
+    doc.text('IMPAK NIAGA • LAPORAN AUDIT & PELAN TINDAKAN STRATEGIK MOFASS', margin, 9);
 
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(neutralGray[0], neutralGray[1], neutralGray[2]);
@@ -82,32 +112,41 @@ export function generateProfessionalPDF(rawAssessment: AssessmentResult): void {
   doc.setFillColor(accentIndigo[0], accentIndigo[1], accentIndigo[2]);
   doc.rect(0, 75, pageWidth, 3, 'F');
 
-  // Badge M6 Logo
-  doc.setFillColor(accentIndigo[0], accentIndigo[1], accentIndigo[2]);
-  doc.roundedRect(margin, 16, 16, 16, 3, 3, 'F');
+  // Official Logo Container
+  if (logoData) {
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(margin, 14, 38, 20, 3, 3, 'F');
+    doc.addImage(logoData, 'PNG', margin + 2, 15.5, 34, 17);
+  } else {
+    doc.setFillColor(accentIndigo[0], accentIndigo[1], accentIndigo[2]);
+    doc.roundedRect(margin, 16, 24, 16, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text('IMPAK', margin + 12, 23, { align: 'center' });
+    doc.setFontSize(8);
+    doc.text('NIAGA', margin + 12, 28, { align: 'center' });
+  }
+
+  // Document Title Header beside Logo
+  const titleLeft = margin + 42;
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text('M6', margin + 8, 27, { align: 'center' });
+  doc.setFontSize(9.5);
+  doc.text('IMPAK NIAGA • STANDAR AUDIT DIAGNOSTIK KEBANGSAAN PMKS', titleLeft, 20);
 
-  // Document Title Header
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.text('STANDAR AUDIT DIAGNOSTIK KEBANGSAAN PMKS MALAYSIA', margin + 22, 21);
-
-  doc.setFontSize(16);
-  doc.text('LAPORAN PRESTASI & PELAN TINDAKAN STRATEGIK', margin + 22, 28);
+  doc.setFontSize(15);
+  doc.text('LAPORAN PRESTASI & PELAN TINDAKAN STRATEGIK', titleLeft, 27);
 
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
+  doc.setFontSize(8.5);
   doc.setTextColor(203, 213, 225);
-  doc.text('Kerangka Penilaian Kompetensi MOFASS: Marketing, Operation, Finance, Administration, Sales, System', margin + 22, 34);
+  doc.text('Kerangka Penilaian Kompetensi MOFASS: Marketing, Operation, Finance, Administration, Sales, System', titleLeft, 33);
 
   // Reference and Date in Cover Header
   doc.setFontSize(8);
   doc.setTextColor(148, 163, 184);
-  doc.text(`ID Audit: ${assessment.id}   |   Tarikh: ${createdDate}`, margin + 22, 41);
+  doc.text(`ID Audit: ${assessment.id}   |   Tarikh: ${createdDate}`, titleLeft, 39);
 
   // Business Profile Info Card
   let curY = 88;
@@ -1006,9 +1045,9 @@ export function generateProfessionalPDF(rawAssessment: AssessmentResult): void {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
   doc.setTextColor(accentIndigo[0], accentIndigo[1], accentIndigo[2]);
-  doc.text('MOFASS PMKS', margin + 20, curY + 14, { align: 'center' });
+  doc.text('IMPAK NIAGA', margin + 20, curY + 14, { align: 'center' });
   doc.setFontSize(6.5);
-  doc.text('SAH DIAUDIT', margin + 20, curY + 18, { align: 'center' });
+  doc.text('MOFASS SAH', margin + 20, curY + 18, { align: 'center' });
   doc.setFontSize(5.5);
   doc.text(assessment.id.slice(0, 14), margin + 20, curY + 22, { align: 'center' });
 
@@ -1042,7 +1081,7 @@ export function generateProfessionalPDF(rawAssessment: AssessmentResult): void {
       doc.setFontSize(7.5);
       doc.setTextColor(neutralGray[0], neutralGray[1], neutralGray[2]);
       doc.text(
-        `Dokumen Rasmi Dijana oleh Sistem Analisis Kompetensi PMKS (MOFASS) • Muka Surat 1 daripada ${totalPages}`,
+        `Dokumen Rasmi Dijana oleh Impak Niaga (Sistem Analisis Kompetensi PMKS MOFASS) • Muka Surat 1 daripada ${totalPages}`,
         pageWidth / 2,
         pageHeight - 6,
         { align: 'center' }

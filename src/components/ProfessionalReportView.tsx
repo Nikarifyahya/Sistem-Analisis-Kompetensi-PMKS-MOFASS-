@@ -147,12 +147,16 @@ export const ProfessionalReportView: React.FC<ProfessionalReportViewProps> = ({
         <div className="pb-10 border-b-4 border-slate-900 mb-12">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 mb-8">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-slate-950 via-indigo-950 to-slate-900 text-white font-mono font-black text-2xl flex items-center justify-center shadow-md">
-                M6
+              <div className="bg-white p-2 sm:p-2.5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-center shrink-0">
+                <img 
+                  src="/assets/aistudio/Logo_Impak_Niaga_9f4ce565.png" 
+                  alt="Logo Impak Niaga" 
+                  className="h-14 sm:h-16 w-auto object-contain"
+                />
               </div>
               <div>
                 <div className="text-[11px] font-extrabold uppercase tracking-widest text-indigo-700 font-mono">
-                  SISTEM AUDIT DIAGNOSTIK KEBANGSAAN
+                  IMPAK NIAGA • SISTEM AUDIT DIAGNOSTIK PMKS KEBANGSAAN
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950 uppercase leading-tight mt-0.5">
                   LAPORAN AUDIT PRESTASI & PELAN TINDAKAN STRATEGIK PMKS
@@ -758,10 +762,10 @@ export const ProfessionalReportView: React.FC<ProfessionalReportViewProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 items-end">
             <div>
-              <div className="w-28 h-28 rounded-full border-4 border-dashed border-indigo-700/50 flex flex-col items-center justify-center text-center p-2 text-indigo-950 rotate-[-6deg]">
-                <ShieldCheck className="w-8 h-8 text-indigo-700 mb-0.5" />
-                <span className="text-[9px] font-black uppercase tracking-tight">MOFASS PMKS</span>
-                <span className="text-[8px] font-bold text-slate-500 font-mono">SAH DIAUDIT</span>
+              <div className="w-32 h-32 rounded-full border-4 border-dashed border-indigo-700/50 flex flex-col items-center justify-center text-center p-2 text-indigo-950 rotate-[-6deg] bg-indigo-50/20">
+                <ShieldCheck className="w-7 h-7 text-indigo-700 mb-0.5" />
+                <span className="text-[10px] font-black uppercase tracking-tight">IMPAK NIAGA</span>
+                <span className="text-[8px] font-bold text-slate-600 font-mono">MOFASS PMKS DIAUDIT</span>
                 <span className="text-[7px] text-slate-400 font-mono">{assessment.id.slice(0, 16)}</span>
               </div>
             </div>

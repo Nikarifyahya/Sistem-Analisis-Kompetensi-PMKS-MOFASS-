@@ -39,13 +39,20 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center justify-between h-16">
           {/* Brand Logo & Name */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-700 via-indigo-600 to-sky-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
-              <span className="font-extrabold text-base tracking-tight font-mono">M6</span>
+            <div className="h-11 px-2 py-1 bg-white rounded-xl border border-slate-200/90 shadow-xs flex items-center justify-center">
+              <img 
+                src="/assets/aistudio/Logo_Impak_Niaga_9f4ce565.png" 
+                alt="Logo Impak Niaga" 
+                className="h-8 sm:h-9 w-auto object-contain"
+              />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-900 text-lg tracking-tight">MOFASS PMKS</span>
-                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
+                <span className="font-extrabold text-slate-900 text-base sm:text-lg tracking-tight">Impak Niaga</span>
+                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full border border-indigo-200">
+                  MOFASS PMKS
+                </span>
+                <span className="hidden md:inline-flex items-center gap-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-200">
                   <ShieldCheck className="w-3 h-3 text-emerald-600" /> Firebase Auth
                 </span>
               </div>

@@ -111,10 +111,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             <X className="w-5 h-5" />
           </button>
           
-          <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 mx-auto flex items-center justify-center mb-3">
-            <ShieldCheck className="w-7 h-7 text-emerald-300" />
+          <div className="bg-white px-4 py-2 rounded-2xl shadow-md mx-auto w-fit mb-3">
+            <img 
+              src="/assets/aistudio/Logo_Impak_Niaga_9f4ce565.png" 
+              alt="Logo Impak Niaga" 
+              className="h-10 w-auto object-contain"
+            />
           </div>
-          <h2 className="text-xl font-bold tracking-tight">Sistem MOFASS PMKS</h2>
+          <h2 className="text-xl font-bold tracking-tight">Impak Niaga • MOFASS PMKS</h2>
           <p className="text-xs text-indigo-100 mt-1">
             Log masuk selamat untuk menyimpan profil perniagaan dan laporan analitik anda
           </p>

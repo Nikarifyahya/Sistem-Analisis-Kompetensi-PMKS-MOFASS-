@@ -220,9 +220,18 @@ export default function App() {
             {/* Hero Section */}
             <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-8 sm:p-14 text-white shadow-2xl relative overflow-hidden">
               <div className="max-w-3xl space-y-6 relative z-10">
-                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 text-emerald-300 text-xs font-bold backdrop-blur-md border border-white/20">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                  Sistem Diagnostik PMKS Bersepadu • Piawaian MOFASS
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="bg-white/95 px-3.5 py-1.5 rounded-xl shadow-md">
+                    <img 
+                      src="/assets/aistudio/Logo_Impak_Niaga_9f4ce565.png" 
+                      alt="Logo Impak Niaga" 
+                      className="h-8 sm:h-9 w-auto object-contain"
+                    />
+                  </div>
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 text-emerald-300 text-xs font-bold backdrop-blur-md border border-white/20">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                    Sistem Diagnostik PMKS Bersepadu • Piawaian MOFASS
+                  </div>
                 </div>
 
                 <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight leading-tight">
