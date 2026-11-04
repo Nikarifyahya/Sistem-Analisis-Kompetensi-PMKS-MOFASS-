@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, testFirestoreConnection, DEMO_USER } from './firebase/config';
+import { auth, testFirestoreConnection } from './firebase/config';
 import { 
   UserProfile, 
   CompanyProfile, 
@@ -150,44 +150,6 @@ export default function App() {
     saveDraftAnswers(answers);
   };
 
-  // Quick Demo Exploration for Evaluator
-  const handleExploreInstantDemo = async () => {
-    const demoUser = DEMO_USER;
-    const demoCompany: CompanyProfile = {
-      companyName: 'Nusantara Global Tech Solutions Sdn Bhd',
-      ssmNumber: '202101034567 (1435890-X)',
-      sector: 'Teknologi & Digital',
-      businessSize: 'Kecil (RM300k - RM15m / 5 - 75 Pekerja)',
-      yearsInOperation: 4,
-      annualTurnover: 'RM 1,250,000',
-      employeeCount: 14,
-      state: 'Selangor',
-      district: 'Shah Alam',
-      website: 'https://nusantaratech.com.my',
-      briefDescription: 'Penyedia automasi dan perisian pengurusan inventori pintar PMKS.'
-    };
-
-    const demoAnswers: Record<string, number> = {
-      M1: 4, M2: 4, M3: 3, M4: 3, M5: 5, M6: 4, M7: 4, M8: 4, M9: 3, M10: 2,
-      O1: 4, O2: 4, O3: 4, O4: 3, O5: 2, O6: 3, O7: 4, O8: 4, O9: 4, O10: 2,
-      F1: 4, F2: 4, F3: 3, F4: 4, F5: 4, F6: 4, F7: 3, F8: 4, F9: 2, F10: 3,
-      A1: 4, A2: 3, A3: 5, A4: 4, A5: 4, A6: 4, A7: 5, A8: 2, A9: 3, A10: 4,
-      S_SALES1: 4, S_SALES2: 4, S_SALES3: 3, S_SALES4: 4, S_SALES5: 4, S_SALES6: 3, S_SALES7: 2, S_SALES8: 4, S_SALES9: 3, S_SALES10: 4,
-      S_SYSTEM1: 4, S_SYSTEM2: 4, S_SYSTEM3: 3, S_SYSTEM4: 4, S_SYSTEM5: 4, S_SYSTEM6: 3, S_SYSTEM7: 4, S_SYSTEM8: 4, S_SYSTEM9: 2, S_SYSTEM10: 4,
-    };
-
-    setUser(demoUser);
-    setCompany(demoCompany);
-    await saveUserProfile(demoUser);
-    await saveCompanyProfile(demoUser.uid, demoCompany);
-
-    const result = calculateAssessmentScores(demoAnswers, demoCompany, demoUser);
-    setCurrentAssessment(result);
-    await saveAssessmentRecord(result);
-    setPastAssessments([result]);
-    setActiveTab('dashboard');
-  };
-
   const handleStartNewAssessment = () => {
     setDraftAnswers({});
     localStorage.removeItem('mofass_active_draft_answers');
@@ -245,18 +207,10 @@ export default function App() {
                 <div className="flex flex-wrap items-center gap-4 pt-2">
                   <button
                     onClick={() => setIsAuthModalOpen(true)}
-                    className="inline-flex items-center gap-2 px-7 py-3.5 bg-gradient-to-r from-indigo-500 to-sky-500 hover:from-indigo-600 hover:to-sky-600 text-white font-bold text-sm rounded-2xl shadow-lg shadow-indigo-500/25 transition active:scale-98"
+                    className="inline-flex items-center gap-2.5 px-8 py-4 bg-gradient-to-r from-indigo-500 via-indigo-600 to-sky-500 hover:from-indigo-600 hover:to-sky-600 text-white font-bold text-sm sm:text-base rounded-2xl shadow-xl shadow-indigo-500/25 transition active:scale-98"
                   >
-                    <span>Daftar Masuk & Mulakan Penilaian</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-
-                  <button
-                    onClick={handleExploreInstantDemo}
-                    className="inline-flex items-center gap-2 px-6 py-3.5 bg-white/15 hover:bg-white/25 border border-white/25 text-white font-bold text-sm rounded-2xl backdrop-blur-md transition shadow-xs"
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-300" />
-                    <span>Pratonton Laporan Demo (Akses Pantas)</span>
+                    <span>Daftar / Log Masuk & Mulakan Penilaian</span>
+                    <ArrowRight className="w-5 h-5" />
                   </button>
                 </div>
               </div>

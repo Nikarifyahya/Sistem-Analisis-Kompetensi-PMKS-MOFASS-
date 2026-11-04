@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider, 
+  OAuthProvider,
   signInWithPopup, 
   signOut as fbSignOut, 
   onAuthStateChanged,
@@ -26,8 +27,15 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfigJson) : getApp(
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// Google Auth Provider
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
+
+// Apple Auth Provider
+export const appleProvider = new OAuthProvider('apple.com');
+appleProvider.addScope('email');
+appleProvider.addScope('name');
 
 // Connection test as required by Firebase skill
 export async function testFirestoreConnection(): Promise<boolean> {
@@ -72,13 +80,3 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   console.error('Firestore Error:', JSON.stringify(errInfo));
   return errInfo;
 }
-
-// Local mock demo user for frictionless testing if Google Auth popup is blocked or offline
-export const DEMO_USER = {
-  uid: 'demo-pmks-user-001',
-  fullName: 'Nik Arif Yahya',
-  email: 'nikarifyahya@gmail.com',
-  role: 'Pengarah Urusan (Managing Director)',
-  phone: '019-8765432',
-  isDemo: true,
-};
