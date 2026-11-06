@@ -171,19 +171,43 @@ export async function saveAssessmentRecord(rawAssessment: AssessmentResult): Pro
 
   // 5. Also sync to companies collection with last assessment results
   try {
-    const compRef = doc(db, 'companies', cleanAssessment.userId);
+    const safeCompUserId = cleanAssessment.userId || ('company_' + cleanAssessment.id);
+    const compRef = doc(db, 'companies', safeCompUserId);
     await setDoc(compRef, {
-      userId: cleanAssessment.userId,
+      userId: safeCompUserId,
       ...cleanForFirestore(cleanAssessment.companyProfile),
       userFullName: cleanAssessment.userProfile?.fullName || '',
       userEmail: cleanAssessment.userEmail || cleanAssessment.userProfile?.email || '',
       userPhone: cleanAssessment.userProfile?.phone || '',
+      userRole: cleanAssessment.userProfile?.role || '',
       lastAssessmentId: cleanAssessment.id,
       lastScore: cleanAssessment.overallPercentage,
       lastMaturity: cleanAssessment.maturityLevel,
       lastAssessmentDate: cleanAssessment.createdAt,
       updatedAt: new Date().toISOString()
     }, { merge: true });
+
+    // Also update any matching company by name if a document with different ID exists
+    const coName = cleanAssessment.companyProfile?.companyName?.toLowerCase().trim();
+    if (coName) {
+      const snap = await getDocs(collection(db, 'companies'));
+      snap.forEach(async (d) => {
+        const dData = d.data();
+        if (d.id !== safeCompUserId && dData.companyName && dData.companyName.toLowerCase().trim() === coName) {
+          try {
+            await setDoc(doc(db, 'companies', d.id), {
+              lastAssessmentId: cleanAssessment.id,
+              lastScore: cleanAssessment.overallPercentage,
+              lastMaturity: cleanAssessment.maturityLevel,
+              lastAssessmentDate: cleanAssessment.createdAt,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+          } catch (err) {
+            console.warn('Sync existing company by name warning:', err);
+          }
+        }
+      });
+    }
   } catch (e) {
     console.warn('Ralat kemaskini profil syarikat dengan skor penilaian:', e);
   }
@@ -305,6 +329,29 @@ export async function getAllCompaniesAdmin(): Promise<RegisteredCompanyRecord[]>
     console.warn('Extract companies from assessments error:', e);
   }
 
+  // Cross-reference with assessments in Firestore to ensure evaluation status is always up to date
+  try {
+    const assessSnap = await getDocs(collection(db, 'assessments'));
+    assessSnap.forEach((docSnap) => {
+      const aData = docSnap.data() as AssessmentResult;
+      if (aData && aData.id) {
+        companiesMap.forEach((comp) => {
+          const matchesUser = aData.userId && (aData.userId === comp.userId);
+          const matchesName = aData.companyProfile?.companyName && comp.companyName && 
+            (aData.companyProfile.companyName.toLowerCase().trim() === comp.companyName.toLowerCase().trim());
+          if (matchesUser || matchesName) {
+            comp.lastAssessmentId = aData.id;
+            comp.lastScore = aData.overallPercentage;
+            comp.lastMaturity = aData.maturityLevel;
+            comp.lastAssessmentDate = aData.createdAt;
+          }
+        });
+      }
+    });
+  } catch (err) {
+    console.warn('Cross-reference assessments error:', err);
+  }
+
   return Array.from(companiesMap.values());
 }
 
@@ -329,11 +376,20 @@ export function subscribeAllCompaniesAdmin(
           }
         });
 
-        // Also merge local
+        // Also merge local and cross-reference
         getAllCompaniesAdmin().then((all) => {
           all.forEach((c) => {
             if (!firestoreMap.has(c.userId)) {
               firestoreMap.set(c.userId, c);
+            } else {
+              // Copy over enriched assessment info if missing in snapshot
+              const current = firestoreMap.get(c.userId)!;
+              if ((!current.lastScore || !current.lastAssessmentId) && c.lastScore) {
+                current.lastScore = c.lastScore;
+                current.lastMaturity = c.lastMaturity;
+                current.lastAssessmentId = c.lastAssessmentId;
+                current.lastAssessmentDate = c.lastAssessmentDate;
+              }
             }
           });
           onUpdate(Array.from(firestoreMap.values()));
@@ -372,9 +428,13 @@ export async function getAllAssessmentsAdmin(): Promise<AssessmentResult[]> {
     const snap = await getDocs(colRef);
     if (!snap.empty) {
       snap.forEach((docSnap) => {
-        const data = docSnap.data() as AssessmentResult;
-        if (data && data.id) {
-          combinedMap.set(data.id, ensureCompleteAssessment(data));
+        try {
+          const data = docSnap.data() as AssessmentResult;
+          if (data && data.id) {
+            combinedMap.set(data.id, ensureCompleteAssessment(data));
+          }
+        } catch (itemErr) {
+          console.warn('Error parsing assessment document:', docSnap.id, itemErr);
         }
       });
     }
@@ -423,7 +483,7 @@ export async function getAllAssessmentsAdmin(): Promise<AssessmentResult[]> {
 export async function deleteAssessmentRecordAdmin(assessmentId: string): Promise<boolean> {
   let success = false;
 
-  // 1. Delete from Firestore
+  // 1. Delete from Firestore assessments
   try {
     const docRef = doc(db, 'assessments', assessmentId);
     await deleteDoc(docRef);
@@ -432,7 +492,29 @@ export async function deleteAssessmentRecordAdmin(assessmentId: string): Promise
     console.warn('Firestore delete failed:', error);
   }
 
-  // 2. Delete from LocalStorage
+  // 2. Also clear assessment links on any company in Firestore
+  try {
+    const snap = await getDocs(collection(db, 'companies'));
+    for (const docSnap of snap.docs) {
+      const data = docSnap.data();
+      if (data.lastAssessmentId === assessmentId) {
+        if (docSnap.id === 'company_' + assessmentId) {
+          await deleteDoc(doc(db, 'companies', docSnap.id));
+        } else {
+          await setDoc(doc(db, 'companies', docSnap.id), {
+            lastAssessmentId: null,
+            lastScore: null,
+            lastMaturity: null,
+            lastAssessmentDate: null
+          }, { merge: true });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error clearing company assessment reference:', err);
+  }
+
+  // 3. Delete from LocalStorage
   try {
     const localStr = localStorage.getItem(LOCAL_STORAGE_KEY_ASSESSMENTS);
     if (localStr) {
@@ -443,6 +525,12 @@ export async function deleteAssessmentRecordAdmin(assessmentId: string): Promise
     }
   } catch (e) {
     console.warn('LocalStorage delete error:', e);
+  }
+
+  // 4. Dispatch events for instant local UI refresh
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('mofass_assessment_submitted'));
+    window.dispatchEvent(new CustomEvent('mofass_company_updated'));
   }
 
   return success;
@@ -500,9 +588,13 @@ export function subscribeAllAssessmentsAdmin(
       (snapshot) => {
         const items: AssessmentResult[] = [];
         snapshot.forEach((d) => {
-          const item = d.data() as AssessmentResult;
-          if (item && item.id) {
-            items.push(ensureCompleteAssessment(item));
+          try {
+            const item = d.data() as AssessmentResult;
+            if (item && item.id) {
+              items.push(ensureCompleteAssessment(item));
+            }
+          } catch (e) {
+            console.warn('Error parsing snapshot assessment:', d.id, e);
           }
         });
         const combined = mergeAndSort(items);

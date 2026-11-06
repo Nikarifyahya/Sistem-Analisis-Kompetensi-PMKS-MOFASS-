@@ -332,8 +332,7 @@ export const AssessmentWizard: React.FC<AssessmentWizardProps> = ({
             <button
               type="button"
               onClick={() => onComplete(answers)}
-              disabled={totalAnswered < 10}
-              className="flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold transition shadow-lg shadow-emerald-500/20 active:scale-98 disabled:opacity-50"
+              className="flex items-center justify-center gap-2 w-full sm:w-auto px-7 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold transition shadow-lg shadow-emerald-500/20 active:scale-98 cursor-pointer"
             >
               <Sparkles className="w-4 h-4 text-amber-300" />
               <span>Jana Laporan Analisis & Cadangan AI</span>

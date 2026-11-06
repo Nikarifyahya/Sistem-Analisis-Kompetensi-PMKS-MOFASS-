@@ -29,7 +29,8 @@ import {
   Sparkles,
   ArrowRight,
   TrendingDown,
-  Info
+  Info,
+  Loader2
 } from 'lucide-react';
 import { AssessmentResult, UserProfile, MofassCategoryId } from '../types';
 import { 
@@ -42,6 +43,9 @@ import {
 } from '../services/assessmentRepo';
 import { generateProfessionalPDF } from '../utils/pdfGenerator';
 import { MOFASS_CATEGORIES } from '../data/mofassQuestions';
+import { ensureCompleteAssessment } from '../utils/mlEngine';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 const ADMIN_EMAIL = 'nikarifyahya@gmail.com';
 
@@ -59,7 +63,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [assessments, setAssessments] = useState<AssessmentResult[]>([]);
   const [companies, setCompanies] = useState<RegisteredCompanyRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'list' | 'companies'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'companies' | 'dashboard'>('companies');
   
   // Dashboard Sub-navigation for quick jumping
   const [dashboardSection, setDashboardSection] = useState<'all' | 'credit' | 'geo' | 'trend' | 'grants'>('all');
@@ -167,7 +171,19 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       const success = await deleteAssessmentRecordAdmin(itemToDelete.id);
       if (success) {
         setAssessments((prev) => prev.filter((a) => a.id !== itemToDelete.id));
-        showToast(`Laporan bagi syarikat ${itemToDelete.companyProfile.companyName} (${itemToDelete.id}) telah dipadam.`);
+        setCompanies((prev) => prev.map((c) => {
+          if (c.lastAssessmentId === itemToDelete.id) {
+            return {
+              ...c,
+              lastAssessmentId: undefined,
+              lastScore: undefined,
+              lastMaturity: undefined,
+              lastAssessmentDate: undefined
+            };
+          }
+          return c;
+        }));
+        showToast(`Laporan bagi syarikat ${itemToDelete.companyProfile?.companyName || 'PMKS'} (${itemToDelete.id}) telah dipadam.`);
         setItemToDelete(null);
       } else {
         showToast('Gagal memadam laporan. Sila cuba lagi.', 'error');
@@ -177,6 +193,97 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       showToast('Ralat memadam laporan dari pangkalan data.', 'error');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // View Report for Company
+  const handleViewCompanyReport = async (c: RegisteredCompanyRecord, matched?: AssessmentResult) => {
+    if (matched) {
+      onViewAssessment(matched);
+      return;
+    }
+    const found = assessments.find(
+      (a) => (c.lastAssessmentId && a.id === c.lastAssessmentId) || 
+             (c.userId && a.userId === c.userId) || 
+             (a.companyProfile?.companyName && c.companyName && a.companyProfile.companyName.toLowerCase().trim() === c.companyName.toLowerCase().trim())
+    );
+    if (found) {
+      onViewAssessment(found);
+      return;
+    }
+    if (c.lastAssessmentId) {
+      try {
+        const snap = await getDoc(doc(db, 'assessments', c.lastAssessmentId));
+        if (snap.exists()) {
+          const item = ensureCompleteAssessment(snap.data() as AssessmentResult);
+          onViewAssessment(item);
+          return;
+        }
+      } catch (e) {
+        console.warn('Error fetching assessment doc:', e);
+      }
+    }
+    showToast('Laporan belum selesai dijana untuk syarikat ini.', 'error');
+  };
+
+  // Download PDF for Company
+  const handleDownloadCompanyPDF = async (c: RegisteredCompanyRecord, matched?: AssessmentResult) => {
+    let target = matched || assessments.find(
+      (a) => (c.lastAssessmentId && a.id === c.lastAssessmentId) || 
+             (c.userId && a.userId === c.userId) || 
+             (a.companyProfile?.companyName && c.companyName && a.companyProfile.companyName.toLowerCase().trim() === c.companyName.toLowerCase().trim())
+    );
+    if (!target && c.lastAssessmentId) {
+      try {
+        const snap = await getDoc(doc(db, 'assessments', c.lastAssessmentId));
+        if (snap.exists()) {
+          target = ensureCompleteAssessment(snap.data() as AssessmentResult);
+        }
+      } catch (e) {
+        console.warn('Error fetching assessment for PDF:', e);
+      }
+    }
+    if (target) {
+      await handleDownloadPDF(target);
+    } else {
+      showToast('Laporan belum selesai dijana untuk dimuat turun.', 'error');
+    }
+  };
+
+  // Delete Company / Assessment Handler
+  const handleDeleteCompanyOrAssessment = (c: RegisteredCompanyRecord, matched?: AssessmentResult) => {
+    const target = matched || assessments.find(
+      (a) => (c.lastAssessmentId && a.id === c.lastAssessmentId) || 
+             (c.userId && a.userId === c.userId) || 
+             (a.companyProfile?.companyName && c.companyName && a.companyProfile.companyName.toLowerCase().trim() === c.companyName.toLowerCase().trim())
+    );
+    if (target) {
+      setItemToDelete(target);
+    } else if (c.lastAssessmentId) {
+      setItemToDelete({
+        id: c.lastAssessmentId,
+        userId: c.userId,
+        userEmail: c.userEmail || '',
+        companyProfile: c,
+        userProfile: { uid: c.userId, fullName: c.userFullName || '', email: c.userEmail || '' },
+        answers: {},
+        categoryScores: {} as any,
+        totalScore: c.lastScore || 0,
+        overallPercentage: c.lastScore || 0,
+        maturityLevel: (c.lastMaturity as any) || 'Tahap 1',
+        maturityTitle: '',
+        maturityDescription: '',
+        industryLandscape: {} as any,
+        elementDeepAnalyses: {} as any,
+        strategicBlueprint: {} as any,
+        swotAnalysis: { strengths: [], weaknesses: [], opportunities: [], threats: [] },
+        growthRoadmap: [],
+        matchedGovPrograms: [],
+        aiExecutiveSummary: '',
+        createdAt: c.lastAssessmentDate || new Date().toISOString()
+      });
+    } else {
+      showToast('Tiada rekod penilaian aktif untuk dipadam bagi syarikat ini.', 'error');
     }
   };
 
@@ -720,35 +827,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           {/* Primary View Navigation Switcher */}
           <div className="flex items-center gap-2 mt-5 sm:mt-6 pt-3 sm:pt-4 border-t border-slate-800 overflow-x-auto pb-1 text-xs">
             <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                activeTab === 'dashboard'
-                  ? 'bg-amber-400 text-slate-950 shadow-md'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4" />
-              <span>Dashboard & Analisis Eksekutif</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('list')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                activeTab === 'list'
-                  ? 'bg-amber-400 text-slate-950 shadow-md'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              <span>Senarai Laporan Penilaian</span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
-                activeTab === 'list' ? 'bg-slate-900 text-amber-300' : 'bg-slate-800 text-slate-300'
-              }`}>
-                {assessments.length}
-              </span>
-            </button>
-
-            <button
               onClick={() => setActiveTab('companies')}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                 activeTab === 'companies'
@@ -757,12 +835,24 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               }`}
             >
               <Building2 className="w-4 h-4" />
-              <span>Profil Syarikat Berdaftar</span>
+              <span>Direktori & Penilaian PMKS</span>
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
                 activeTab === 'companies' ? 'bg-slate-900 text-amber-300' : 'bg-slate-800 text-slate-300'
               }`}>
                 {companies.length}
               </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                activeTab === 'dashboard'
+                  ? 'bg-amber-400 text-slate-950 shadow-md'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>Dashboard & Analisis Portfolio</span>
             </button>
           </div>
         </div>
@@ -1491,323 +1581,6 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 2: SENARAI LAPORAN PENILAIAN (TABLE VIEW)                              */}
-        {/* ========================================================================= */}
-        {activeTab === 'list' && (
-          <div className="space-y-4 animate-fadeIn">
-            {/* Filter and Search Bar */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-              {/* Search input */}
-              <div className="relative grow max-w-md">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Cari No Rujukan, Nama Syarikat, atau No SSM..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                />
-              </div>
-
-              {/* Filters */}
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs">
-                  <Filter className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="text-slate-500 hidden sm:inline">Sektor:</span>
-                  <select
-                    value={selectedSector}
-                    onChange={(e) => setSelectedSector(e.target.value)}
-                    className="bg-transparent font-bold text-slate-800 text-xs focus:outline-hidden cursor-pointer"
-                  >
-                    <option value="ALL">Semua Sektor</option>
-                    <option value="Makanan & Minuman (F&B)">Makanan & Minuman (F&B)</option>
-                    <option value="Perkhidmatan (Services)">Perkhidmatan (Services)</option>
-                    <option value="Peruncitan & Pemborongan">Peruncitan & Pemborongan</option>
-                    <option value="Pembuatan / Pengilangan">Pembuatan / Pengilangan</option>
-                    <option value="Teknologi & Digital">Teknologi & Digital</option>
-                    <option value="Profesional & Konsultansi">Profesional & Konsultansi</option>
-                    <option value="Pertanian & Asas Tani">Pertanian & Asas Tani</option>
-                    <option value="Pembinaan & Kejuruteraan">Pembinaan & Kejuruteraan</option>
-                    <option value="Lain-lain">Lain-lain</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 text-xs">
-                  <span className="text-slate-500 hidden sm:inline">Kematangan:</span>
-                  <select
-                    value={selectedMaturity}
-                    onChange={(e) => setSelectedMaturity(e.target.value)}
-                    className="bg-transparent font-bold text-slate-800 text-xs focus:outline-hidden cursor-pointer"
-                  >
-                    <option value="ALL">Semua Tahap</option>
-                    <option value="Tahap 4">Tahap 4 (Unggul)</option>
-                    <option value="Tahap 3">Tahap 3 (Mantap)</option>
-                    <option value="Tahap 2">Tahap 2 (Berkembang)</option>
-                    <option value="Tahap 1">Tahap 1 (Asas)</option>
-                  </select>
-                </div>
-
-                {(searchQuery || selectedSector !== 'ALL' || selectedMaturity !== 'ALL') && (
-                  <button
-                    onClick={() => {
-                      setSearchQuery('');
-                      setSelectedSector('ALL');
-                      setSelectedMaturity('ALL');
-                    }}
-                    className="text-xs text-rose-600 hover:text-rose-700 font-bold px-2 py-1.5"
-                  >
-                    Set Semula
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Table of Assessments (Desktop table + Mobile Cards responsive) */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-              
-              {/* Desktop Table */}
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-900 text-white text-[11px] uppercase tracking-wider font-bold">
-                      <th className="py-3.5 px-4 text-center w-12">Bil</th>
-                      <th className="py-3.5 px-4 min-w-[150px]">No Rujukan</th>
-                      <th className="py-3.5 px-4 min-w-[240px]">Nama Syarikat</th>
-                      <th className="py-3.5 px-4 min-w-[150px]">Tarikh Dikeluarkan</th>
-                      <th className="py-3.5 px-4 text-center min-w-[280px]">Salinan Pdf Laporan lengkap</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
-                    {filteredAssessments.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="py-12 text-center text-slate-400">
-                          {loading ? (
-                            <div className="flex flex-col items-center gap-2">
-                              <RefreshCw className="w-6 h-6 animate-spin text-indigo-600" />
-                              <span>Memuat turun pangkalan data laporan...</span>
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              <FileText className="w-8 h-8 mx-auto text-slate-300 mb-1" />
-                              <p className="font-semibold text-slate-600">Tiada laporan dijumpai.</p>
-                              <p className="text-[11px] text-slate-400">Cuba ubah carian atau tetapan penapis anda.</p>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredAssessments.map((item, index) => {
-                        const isDownloading = downloadingId === item.id;
-                        const isCopied = copiedId === item.id;
-
-                        let matBadge = 'bg-rose-50 text-rose-700 border-rose-200';
-                        if (item.maturityLevel === 'Tahap 4') matBadge = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-                        else if (item.maturityLevel === 'Tahap 3') matBadge = 'bg-sky-50 text-sky-700 border-sky-200';
-                        else if (item.maturityLevel === 'Tahap 2') matBadge = 'bg-amber-50 text-amber-700 border-amber-200';
-
-                        return (
-                          <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                            {/* 1. Bil */}
-                            <td className="py-3.5 px-4 text-center font-bold text-slate-500">
-                              {index + 1}
-                            </td>
-
-                            {/* 2. No Rujukan */}
-                            <td className="py-3.5 px-4">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-mono font-bold text-indigo-700 bg-indigo-50/80 px-2.5 py-1 rounded-lg border border-indigo-200/80 text-[11px]">
-                                  {item.id}
-                                </span>
-                                <button
-                                  onClick={() => handleCopyRef(item.id)}
-                                  title="Salin No Rujukan"
-                                  className="p-1 text-slate-400 hover:text-indigo-600 rounded-md transition"
-                                >
-                                  {isCopied ? (
-                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                  ) : (
-                                    <Copy className="w-3.5 h-3.5" />
-                                  )}
-                                </button>
-                              </div>
-                              <div className="text-[10px] text-slate-400 mt-1">
-                                Skor: <span className="font-bold text-slate-700">{item.overallPercentage}%</span>
-                                {' • '}
-                                <span className={`inline-block px-1.5 py-0.2 rounded border font-semibold ${matBadge}`}>
-                                  {item.maturityLevel}
-                                </span>
-                              </div>
-                            </td>
-
-                            {/* 3. Nama Syarikat */}
-                            <td className="py-3.5 px-4">
-                              <div className="font-extrabold text-slate-900 leading-snug">
-                                {item.companyProfile?.companyName || 'Syarikat PMKS'}
-                              </div>
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px] text-slate-500">
-                                {item.companyProfile?.ssmNumber && (
-                                  <span className="font-mono bg-slate-100 px-1.5 py-0.5 rounded text-[10px]">
-                                    {item.companyProfile.ssmNumber}
-                                  </span>
-                                )}
-                                <span>•</span>
-                                <span className="text-slate-600 font-medium">{item.companyProfile?.sector}</span>
-                                {item.companyProfile?.state && (
-                                  <>
-                                    <span>•</span>
-                                    <span>{item.companyProfile.state}</span>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-
-                            {/* 4. Tarikh Dikeluarkan */}
-                            <td className="py-3.5 px-4 font-medium text-slate-600 whitespace-nowrap">
-                              {formatReportDate(item.createdAt)}
-                            </td>
-
-                            {/* 5. Salinan Pdf Laporan lengkap (Actions: Lihat Laporan | Muat Turun | Padam) */}
-                            <td className="py-3.5 px-4">
-                              <div className="flex items-center justify-center gap-1.5">
-                                {/* Butang 1: Lihat Laporan */}
-                                <button
-                                  onClick={() => onViewAssessment(item)}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 font-bold text-xs rounded-xl border border-slate-200 hover:border-indigo-300 transition shadow-2xs active:scale-95"
-                                  title="Lihat Laporan Interaktif"
-                                >
-                                  <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                                  <span>Lihat Laporan</span>
-                                </button>
-
-                                {/* Butang 2: Muat Turun (Official PDF via jsPDF) */}
-                                <button
-                                  onClick={() => handleDownloadPDF(item)}
-                                  disabled={isDownloading}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-bold text-xs rounded-xl shadow-xs transition active:scale-95"
-                                  title="Muat Turun Salinan PDF Lengkap"
-                                >
-                                  {isDownloading ? (
-                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                                  ) : (
-                                    <Download className="w-3.5 h-3.5" />
-                                  )}
-                                  <span>{isDownloading ? 'Menjana...' : 'Muat Turun'}</span>
-                                </button>
-
-                                {/* Butang 3: Padam */}
-                                <button
-                                  onClick={() => setItemToDelete(item)}
-                                  className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 hover:border-rose-300 transition active:scale-95"
-                                  title="Padam Laporan Ini"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                                  <span>Padam</span>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Mobile Responsive Cards View */}
-              <div className="md:hidden divide-y divide-slate-100">
-                {filteredAssessments.length === 0 ? (
-                  <div className="py-12 text-center text-slate-400 px-4">
-                    <FileText className="w-8 h-8 mx-auto text-slate-300 mb-1" />
-                    <p className="font-semibold text-slate-600 text-xs">Tiada laporan dijumpai.</p>
-                  </div>
-                ) : (
-                  filteredAssessments.map((item, index) => {
-                    const isDownloading = downloadingId === item.id;
-                    const isCopied = copiedId === item.id;
-
-                    return (
-                      <div key={item.id} className="p-4 space-y-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                              Bil #{index + 1} • {formatReportDate(item.createdAt)}
-                            </div>
-                            <h4 className="font-extrabold text-slate-900 text-sm mt-0.5">
-                              {item.companyProfile?.companyName}
-                            </h4>
-                            <div className="text-[11px] text-slate-500 mt-0.5">
-                              {item.companyProfile?.ssmNumber} • {item.companyProfile?.sector}
-                            </div>
-                          </div>
-
-                          <div className="text-right shrink-0">
-                            <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
-                              {item.overallPercentage}%
-                            </span>
-                            <div className="text-[10px] text-slate-500 font-bold mt-1">
-                              {item.maturityLevel}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs bg-slate-50 p-2 rounded-xl border border-slate-100">
-                          <span className="font-mono text-slate-700 text-[11px] truncate">{item.id}</span>
-                          <button
-                            onClick={() => handleCopyRef(item.id)}
-                            className="p-1 text-slate-500 hover:text-indigo-600 transition"
-                          >
-                            {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                          </button>
-                        </div>
-
-                        {/* Mobile Action Buttons (3 full touch targets) */}
-                        <div className="grid grid-cols-3 gap-2 pt-1">
-                          <button
-                            onClick={() => onViewAssessment(item)}
-                            className="py-2 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1 transition"
-                          >
-                            <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>Lihat</span>
-                          </button>
-
-                          <button
-                            onClick={() => handleDownloadPDF(item)}
-                            disabled={isDownloading}
-                            className="py-2 px-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1 transition disabled:opacity-50"
-                          >
-                            {isDownloading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                            <span>PDF</span>
-                          </button>
-
-                          <button
-                            onClick={() => setItemToDelete(item)}
-                            className="py-2 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl flex items-center justify-center gap-1 transition border border-rose-200"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                            <span>Padam</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Table Footer info */}
-              <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
-                <div>
-                  Menunjukkan <span className="font-bold text-slate-800">{filteredAssessments.length}</span> daripada <span className="font-bold text-slate-800">{assessments.length}</span> jumlah laporan berdaftar
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Pengesyoran automatik berasaskan ML & piawaian MOFASS</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ========================================================================= */}
         {/* TAB 3: PROFIL SYARIKAT PMKS BERDAFTAR                                    */}
         {/* ========================================================================= */}
         {activeTab === 'companies' && (
@@ -1836,13 +1609,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 <div className="bg-emerald-50 border border-emerald-200 px-4 py-2.5 rounded-2xl text-center">
                   <div className="text-[10px] uppercase font-bold text-emerald-700">Telah Buat Penilaian</div>
                   <div className="text-xl font-black text-emerald-800">
-                    {companies.filter((c) => c.lastAssessmentId || assessments.some((a) => a.userId === c.userId || a.companyProfile?.companyName?.toLowerCase() === c.companyName?.toLowerCase())).length}
+                    {companies.filter((c) => 
+                      Boolean(c.lastAssessmentId || (c.lastScore !== undefined && c.lastScore !== null && c.lastScore > 0) || assessments.some((a) => a.userId === c.userId || (a.companyProfile?.companyName && c.companyName && a.companyProfile.companyName.toLowerCase().trim() === c.companyName.toLowerCase().trim())))
+                    ).length}
                   </div>
                 </div>
                 <div className="bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-2xl text-center">
                   <div className="text-[10px] uppercase font-bold text-amber-700">Menunggu Penilaian</div>
                   <div className="text-xl font-black text-amber-800">
-                    {Math.max(0, companies.length - companies.filter((c) => c.lastAssessmentId || assessments.some((a) => a.userId === c.userId || a.companyProfile?.companyName?.toLowerCase() === c.companyName?.toLowerCase())).length)}
+                    {Math.max(0, companies.length - companies.filter((c) => 
+                      Boolean(c.lastAssessmentId || (c.lastScore !== undefined && c.lastScore !== null && c.lastScore > 0) || assessments.some((a) => a.userId === c.userId || (a.companyProfile?.companyName && c.companyName && a.companyProfile.companyName.toLowerCase().trim() === c.companyName.toLowerCase().trim())))
+                    ).length)}
                   </div>
                 </div>
               </div>
@@ -1902,13 +1679,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   <thead>
                     <tr className="bg-slate-900 text-white font-bold border-b border-slate-800">
                       <th className="py-3.5 px-4 w-12 text-center text-[11px] uppercase tracking-wider text-slate-400">Bil</th>
-                      <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300">Syarikat & No SSM</th>
+                      <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300">No Rujukan & Syarikat</th>
                       <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300">Maklumat Usahawan</th>
                       <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300">Sektor & Saiz</th>
                       <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300">Kewangan & Pekerja</th>
                       <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300">Lokasi</th>
-                      <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300 text-center">Status Penilaian</th>
-                      <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300 text-center w-28">Tindakan</th>
+                      <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300 text-center">Status & Tarikh Penilaian</th>
+                      <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300 text-center min-w-[210px]">Salinan PDF & Tindakan</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1924,10 +1701,34 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       </tr>
                     ) : (
                       filteredCompanies.map((c, idx) => {
-                        // Find matching assessment if any
+                        // Find matching assessment by ID, user ID, company name, or SSM
                         const matchingAssessment = assessments.find(
-                          (a) => a.id === c.lastAssessmentId || a.userId === c.userId || a.companyProfile?.companyName?.toLowerCase() === c.companyName?.toLowerCase()
+                          (a) =>
+                            (c.lastAssessmentId && a.id === c.lastAssessmentId) ||
+                            (c.userId && a.userId === c.userId) ||
+                            (a.companyProfile?.companyName &&
+                              c.companyName &&
+                              a.companyProfile.companyName.toLowerCase().trim() === c.companyName.toLowerCase().trim()) ||
+                            (a.companyProfile?.ssmNumber &&
+                              c.ssmNumber &&
+                              a.companyProfile.ssmNumber.replace(/\s+/g, '') === c.ssmNumber.replace(/\s+/g, ''))
                         );
+
+                        const hasAssessment = Boolean(
+                          matchingAssessment ||
+                          (c.lastScore !== undefined && c.lastScore !== null && c.lastScore > 0) ||
+                          c.lastAssessmentId
+                        );
+
+                        const score = matchingAssessment ? matchingAssessment.overallPercentage : (c.lastScore ?? 0);
+                        const maturity = matchingAssessment
+                          ? matchingAssessment.maturityLevel
+                          : (c.lastMaturity || (score >= 80 ? 'Tahap 4' : score >= 60 ? 'Tahap 3' : score >= 40 ? 'Tahap 2' : 'Tahap 1'));
+                        const reportDate = matchingAssessment
+                          ? matchingAssessment.createdAt
+                          : (c.lastAssessmentDate || c.updatedAt || new Date().toISOString());
+                        const refNo = matchingAssessment?.id || c.lastAssessmentId || (hasAssessment ? `MOFASS-AUDIT-${(c.userId || 'PMKS').slice(-6).toUpperCase()}` : null);
+                        const isDownloading = refNo ? downloadingId === refNo : false;
 
                         return (
                           <tr key={c.userId || idx} className="hover:bg-slate-50/80 transition group">
@@ -1941,6 +1742,24 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               <div className="text-[11px] text-slate-500 font-mono mt-0.5">
                                 SSM: {c.ssmNumber || 'Tidak Dinyatakan'}
                               </div>
+                              {refNo && (
+                                <div className="mt-1 flex items-center gap-1.5">
+                                  <span className="text-[10px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-1.5 py-0.5 rounded font-semibold">
+                                    {refNo}
+                                  </span>
+                                  <button
+                                    onClick={() => handleCopyRef(refNo)}
+                                    title="Salin No Rujukan"
+                                    className="p-0.5 text-slate-400 hover:text-indigo-600 transition cursor-pointer"
+                                  >
+                                    {copiedId === refNo ? (
+                                      <Check className="w-3 h-3 text-emerald-600" />
+                                    ) : (
+                                      <Copy className="w-3 h-3" />
+                                    )}
+                                  </button>
+                                </div>
+                              )}
                             </td>
                             <td className="py-3 px-4">
                               <div className="font-medium text-slate-800">
@@ -1983,31 +1802,61 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                               )}
                             </td>
                             <td className="py-3 px-4 text-center">
-                              {matchingAssessment ? (
+                              {hasAssessment ? (
                                 <div className="inline-flex flex-col items-center">
-                                  <span className="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full">
-                                    {matchingAssessment.overallPercentage}% • {matchingAssessment.maturityLevel}
+                                  <span className={`text-xs font-black px-2.5 py-0.5 rounded-full border ${
+                                    score >= 75
+                                      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                      : score >= 50
+                                      ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                                      : 'text-amber-700 bg-amber-50 border-amber-200'
+                                  }`}>
+                                    {score}% • {maturity}
                                   </span>
-                                  <span className="text-[10px] text-slate-400 mt-0.5">
-                                    {formatReportDate(matchingAssessment.createdAt)}
+                                  <span className="text-[10px] text-slate-400 mt-1 flex items-center gap-1">
+                                    <Calendar className="w-3 h-3 text-slate-400" />
+                                    {formatReportDate(reportDate)}
                                   </span>
                                 </div>
                               ) : (
-                                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
                                   Menunggu Penilaian
                                 </span>
                               )}
                             </td>
                             <td className="py-3 px-4 text-center">
-                              {matchingAssessment ? (
-                                <button
-                                  onClick={() => onViewAssessment(matchingAssessment)}
-                                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-xl shadow-xs transition"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  <span>Laporan</span>
-                                </button>
+                              {hasAssessment ? (
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    onClick={() => handleViewCompanyReport(c, matchingAssessment)}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-lg shadow-xs transition active:scale-95 cursor-pointer"
+                                    title="Lihat Laporan Lengkap"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>Lihat</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleDownloadCompanyPDF(c, matchingAssessment)}
+                                    disabled={isDownloading}
+                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white font-bold text-[11px] rounded-lg shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                                    title="Muat Turun Salinan PDF Lengkap"
+                                  >
+                                    {isDownloading ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                      <Download className="w-3.5 h-3.5" />
+                                    )}
+                                    <span>PDF</span>
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteCompanyOrAssessment(c, matchingAssessment)}
+                                    className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 border border-rose-200 rounded-lg transition active:scale-95 cursor-pointer"
+                                    title="Padam Laporan"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               ) : (
                                 <span className="text-[11px] text-slate-400 italic">Tiada Laporan</span>
                               )}
@@ -2031,8 +1880,32 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 ) : (
                   filteredCompanies.map((c, idx) => {
                     const matchingAssessment = assessments.find(
-                      (a) => a.id === c.lastAssessmentId || a.userId === c.userId || a.companyProfile?.companyName?.toLowerCase() === c.companyName?.toLowerCase()
+                      (a) =>
+                        (c.lastAssessmentId && a.id === c.lastAssessmentId) ||
+                        (c.userId && a.userId === c.userId) ||
+                        (a.companyProfile?.companyName &&
+                          c.companyName &&
+                          a.companyProfile.companyName.toLowerCase().trim() === c.companyName.toLowerCase().trim()) ||
+                        (a.companyProfile?.ssmNumber &&
+                          c.ssmNumber &&
+                          a.companyProfile.ssmNumber.replace(/\s+/g, '') === c.ssmNumber.replace(/\s+/g, ''))
                     );
+
+                    const hasAssessment = Boolean(
+                      matchingAssessment ||
+                      (c.lastScore !== undefined && c.lastScore !== null && c.lastScore > 0) ||
+                      c.lastAssessmentId
+                    );
+
+                    const score = matchingAssessment ? matchingAssessment.overallPercentage : (c.lastScore ?? 0);
+                    const maturity = matchingAssessment
+                      ? matchingAssessment.maturityLevel
+                      : (c.lastMaturity || (score >= 80 ? 'Tahap 4' : score >= 60 ? 'Tahap 3' : score >= 40 ? 'Tahap 2' : 'Tahap 1'));
+                    const reportDate = matchingAssessment
+                      ? matchingAssessment.createdAt
+                      : (c.lastAssessmentDate || c.updatedAt || new Date().toISOString());
+                    const refNo = matchingAssessment?.id || c.lastAssessmentId || (hasAssessment ? `MOFASS-AUDIT-${(c.userId || 'PMKS').slice(-6).toUpperCase()}` : null);
+                    const isDownloading = refNo ? downloadingId === refNo : false;
 
                     return (
                       <div key={c.userId || idx} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3">
@@ -2047,15 +1920,45 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             <div className="text-[11px] text-slate-500 font-mono">
                               SSM: {c.ssmNumber || 'Tidak Dinyatakan'}
                             </div>
+                            {refNo && (
+                              <div className="mt-1 flex items-center gap-1.5">
+                                <span className="text-[10px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-1.5 py-0.5 rounded font-semibold">
+                                  {refNo}
+                                </span>
+                                <button
+                                  onClick={() => handleCopyRef(refNo)}
+                                  title="Salin No Rujukan"
+                                  className="p-0.5 text-slate-400 hover:text-indigo-600 transition cursor-pointer"
+                                >
+                                  {copiedId === refNo ? (
+                                    <Check className="w-3 h-3 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="w-3 h-3" />
+                                  )}
+                                </button>
+                              </div>
+                            )}
                           </div>
 
-                          {matchingAssessment ? (
-                            <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200 shrink-0">
-                              {matchingAssessment.overallPercentage}%
-                            </span>
+                          {hasAssessment ? (
+                            <div className="text-right shrink-0">
+                              <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${
+                                score >= 75
+                                  ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                  : score >= 50
+                                  ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                                  : 'text-amber-700 bg-amber-50 border-amber-200'
+                              }`}>
+                                {score}% • {maturity}
+                              </span>
+                              <div className="text-[10px] text-slate-400 mt-1">
+                                {formatReportDate(reportDate)}
+                              </div>
+                            </div>
                           ) : (
-                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 shrink-0">
-                              Belum Dinilai
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 shrink-0 inline-flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                              Menunggu Penilaian
                             </span>
                           )}
                         </div>
@@ -2091,14 +1994,39 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           </div>
                         </div>
 
-                        {matchingAssessment && (
-                          <button
-                            onClick={() => onViewAssessment(matchingAssessment)}
-                            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                            <span>Lihat Laporan Penilaian Lengkap ({matchingAssessment.id})</span>
-                          </button>
+                        {hasAssessment ? (
+                          <div className="grid grid-cols-3 gap-2 pt-1">
+                            <button
+                              onClick={() => handleViewCompanyReport(c, matchingAssessment)}
+                              className="py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1 shadow-xs transition cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Lihat</span>
+                            </button>
+                            <button
+                              onClick={() => handleDownloadCompanyPDF(c, matchingAssessment)}
+                              disabled={isDownloading}
+                              className="py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1 shadow-xs transition disabled:opacity-50 cursor-pointer"
+                            >
+                              {isDownloading ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Download className="w-3.5 h-3.5" />
+                              )}
+                              <span>PDF</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCompanyOrAssessment(c, matchingAssessment)}
+                              className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl flex items-center justify-center gap-1 transition cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Padam</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="text-center py-2 text-xs text-amber-700 font-medium bg-amber-50/60 rounded-xl border border-amber-200/60">
+                            Menunggu Penilaian Selesai Diisi
+                          </div>
                         )}
                       </div>
                     );

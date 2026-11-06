@@ -214,7 +214,24 @@ export function ensureCompleteAssessment(rawAssessment: AssessmentResult): Asses
     role: 'Pengarah Urusan'
   };
 
-  const categoryScores = rawAssessment.categoryScores;
+  const rawScores = rawAssessment.categoryScores || ({} as any);
+  const defaultCategoryScores: Record<MofassCategoryId, CategoryScoreResult> = {
+    M: { categoryId: 'M', categoryName: 'Marketing (Pemasaran)', score: 35, maxScore: 50, percentage: 70, levelGrade: 'Tahap 3', levelLabel: 'Kompeten & Mampan', status: 'Memuaskan', keyGaps: [], keyStrengths: [] },
+    O: { categoryId: 'O', categoryName: 'Operation (Operasi)', score: 35, maxScore: 50, percentage: 70, levelGrade: 'Tahap 3', levelLabel: 'Kompeten & Mampan', status: 'Memuaskan', keyGaps: [], keyStrengths: [] },
+    F: { categoryId: 'F', categoryName: 'Finance (Kewangan)', score: 35, maxScore: 50, percentage: 70, levelGrade: 'Tahap 3', levelLabel: 'Kompeten & Mampan', status: 'Memuaskan', keyGaps: [], keyStrengths: [] },
+    A: { categoryId: 'A', categoryName: 'Administration (Pentadbiran)', score: 35, maxScore: 50, percentage: 70, levelGrade: 'Tahap 3', levelLabel: 'Kompeten & Mampan', status: 'Memuaskan', keyGaps: [], keyStrengths: [] },
+    S_SALES: { categoryId: 'S_SALES', categoryName: 'Sales (Jualan)', score: 35, maxScore: 50, percentage: 70, levelGrade: 'Tahap 3', levelLabel: 'Kompeten & Mampan', status: 'Memuaskan', keyGaps: [], keyStrengths: [] },
+    S_SYSTEM: { categoryId: 'S_SYSTEM', categoryName: 'System (Sistem & Teknologi)', score: 35, maxScore: 50, percentage: 70, levelGrade: 'Tahap 3', levelLabel: 'Kompeten & Mampan', status: 'Memuaskan', keyGaps: [], keyStrengths: [] },
+  };
+
+  const categoryScores: Record<MofassCategoryId, CategoryScoreResult> = {
+    M: rawScores.M || defaultCategoryScores.M,
+    O: rawScores.O || defaultCategoryScores.O,
+    F: rawScores.F || defaultCategoryScores.F,
+    A: rawScores.A || defaultCategoryScores.A,
+    S_SALES: rawScores.S_SALES || defaultCategoryScores.S_SALES,
+    S_SYSTEM: rawScores.S_SYSTEM || defaultCategoryScores.S_SYSTEM,
+  };
   const overallPercentage = rawAssessment.overallPercentage || 70;
 
   const defaultLandscape = generateIndustryLandscape(company);
@@ -474,13 +491,20 @@ export function generateIndustryLandscape(company: CompanyProfile): IndustryLand
 }
 
 function generateElementDeepAnalyses(
-  scores: Record<MofassCategoryId, CategoryScoreResult>,
+  scores: Record<MofassCategoryId, CategoryScoreResult> | undefined,
   answers: Record<string, number>
 ): Record<MofassCategoryId, ElementDeepAnalysis> {
   const result: Record<MofassCategoryId, ElementDeepAnalysis> = {} as any;
 
+  const safeScores = scores || ({} as any);
+  const mScore = safeScores.M || { percentage: 70, status: 'Memuaskan' };
+  const oScore = safeScores.O || { percentage: 70, status: 'Memuaskan' };
+  const fScore = safeScores.F || { percentage: 70, status: 'Memuaskan' };
+  const aScore = safeScores.A || { percentage: 70, status: 'Memuaskan' };
+  const sSalesScore = safeScores.S_SALES || { percentage: 70, status: 'Memuaskan' };
+  const sSysScore = safeScores.S_SYSTEM || { percentage: 70, status: 'Memuaskan' };
+
   // 1. Marketing
-  const mScore = scores.M;
   result.M = {
     categoryId: 'M',
     narrativeDiagnosis: `Dimensi Pemasaran mencatatkan skor ${mScore.percentage}% (${mScore.status}). Syarikat menunjukkan kesedaran terhadap kepentingan kepuasan pelanggan, namun strategi pemasaran berstruktur dan penjenamaan berdaftar masih memerlukan pengukuhan bagi menjamin pengekalan pelanggan yang konsisten.`,
@@ -493,7 +517,6 @@ function generateElementDeepAnalyses(
   };
 
   // 2. Operation
-  const oScore = scores.O;
   result.O = {
     categoryId: 'O',
     narrativeDiagnosis: `Dimensi Operasi mencatatkan skor ${oScore.percentage}% (${oScore.status}). Aliran kerja harian berjalan secara amali, namun kebergantungan kepada arahan lisan berbanding Manual Prosedur Piawaian Pengendalian (SOP) bertulis mendedahkan syarikat kepada ralat kualiti dan pembaziran bahan.`,
@@ -506,7 +529,6 @@ function generateElementDeepAnalyses(
   };
 
   // 3. Finance
-  const fScore = scores.F;
   result.F = {
     categoryId: 'F',
     narrativeDiagnosis: `Dimensi Kewangan mencatatkan skor ${fScore.percentage}% (${fScore.status}). Kedudukan aliran tunai perlu dipantau secara teliti bagi memastikan liabiliti semasa tidak melebihi rizab operasi. Ketepatan rekod simpan kira digital adalah syarat wajib untuk kelayakan pembiayaan institusi kewangan.`,
@@ -519,7 +541,6 @@ function generateElementDeepAnalyses(
   };
 
   // 4. Administration / HR
-  const aScore = scores.A;
   result.A = {
     categoryId: 'A',
     narrativeDiagnosis: `Dimensi Pentadbiran & Sumber Manusia mencatatkan skor ${aScore.percentage}% (${aScore.status}). Struktur organisasi wujud namun pembahagian skop kerja bertulis (Job Description) dan latihan kemahiran berterusan perlu dimantapkan demi mengekalkan bakat berkualiti.`,
@@ -532,7 +553,6 @@ function generateElementDeepAnalyses(
   };
 
   // 5. Sales
-  const sSalesScore = scores.S_SALES;
   result.S_SALES = {
     categoryId: 'S_SALES',
     narrativeDiagnosis: `Dimensi Jualan mencatatkan skor ${sSalesScore.percentage}% (${sSalesScore.status}). Syarikat mempunyai aliran jualan asas, namun daya saing produk dan saluran jualan korporat B2B atau pasaran luar masih belum dimaksimumkan sepenuhnya.`,
@@ -545,7 +565,6 @@ function generateElementDeepAnalyses(
   };
 
   // 6. System / IT
-  const sSysScore = scores.S_SYSTEM;
   result.S_SYSTEM = {
     categoryId: 'S_SYSTEM',
     narrativeDiagnosis: `Dimensi Sistem & Teknologi Maklumat mencatatkan skor ${sSysScore.percentage}% (${sSysScore.status}). Tahap pendigitalan perniagaan masih berada pada fasa pemula dan memerlukan penaiktarafan kepada perisian berpusat yang selamat dan berskala.`,
