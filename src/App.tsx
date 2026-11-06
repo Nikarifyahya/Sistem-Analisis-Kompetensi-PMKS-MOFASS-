@@ -130,10 +130,17 @@ export default function App() {
   };
 
   const handleSaveCompany = async (updatedUser: UserProfile, updatedCompany: CompanyProfile) => {
-    setUser(updatedUser);
+    const safeUid = updatedUser.uid || 'usr_' + Date.now().toString(36);
+    const resolvedUser = { ...updatedUser, uid: safeUid };
+    setUser(resolvedUser);
     setCompany(updatedCompany);
-    await saveUserProfile(updatedUser);
-    await saveCompanyProfile(updatedUser.uid, updatedCompany);
+    await saveUserProfile(resolvedUser);
+    await saveCompanyProfile(safeUid, updatedCompany, {
+      userFullName: resolvedUser.fullName,
+      userEmail: resolvedUser.email,
+      userPhone: resolvedUser.phone,
+      userRole: resolvedUser.role
+    });
     setActiveTab('assessment');
   };
 

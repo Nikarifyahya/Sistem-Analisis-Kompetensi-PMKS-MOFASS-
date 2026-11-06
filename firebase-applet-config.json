@@ -1,8 +1,12 @@
 {
+  "projectId": "sistem-kompetensi",
+  "appId": "1:503826241573:web:059e919a4a2121d2cec7cc",
   "apiKey": "AIzaSyAkdLxJiwIeyHdLHeLxZxME_QrtOOfMJuE",
   "authDomain": "sistem-kompetensi.firebaseapp.com",
-  "projectId": "sistem-kompetensi",
+  "firestoreDatabaseId": "ai-studio-sistemanalisisko-7f966e1f-28d8-48e3-a15c-90b8ec3cc825",
   "storageBucket": "sistem-kompetensi.firebasestorage.app",
   "messagingSenderId": "503826241573",
-  "appId": "1:503826241573:web:059e919a4a2121d2cec7cc"
+  "measurementId": "",
+  "oAuthClientId": "503826241573-oj6mnpmfqqbskqh6ds5j1l6jh1lencsb.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }

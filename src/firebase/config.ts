@@ -26,7 +26,7 @@ import firebaseConfigJson from '../../firebase-applet-config.json';
 const app = getApps().length === 0 ? initializeApp(firebaseConfigJson) : getApp();
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db = getFirestore(app, (firebaseConfigJson as any).firestoreDatabaseId);
 
 // Google Auth Provider
 export const googleProvider = new GoogleAuthProvider();

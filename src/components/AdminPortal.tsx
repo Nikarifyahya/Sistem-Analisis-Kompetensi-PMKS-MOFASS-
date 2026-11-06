@@ -34,8 +34,11 @@ import {
 import { AssessmentResult, UserProfile, MofassCategoryId } from '../types';
 import { 
   getAllAssessmentsAdmin, 
+  getAllCompaniesAdmin,
   deleteAssessmentRecordAdmin,
-  subscribeAllAssessmentsAdmin 
+  subscribeAllAssessmentsAdmin,
+  subscribeAllCompaniesAdmin,
+  RegisteredCompanyRecord 
 } from '../services/assessmentRepo';
 import { generateProfessionalPDF } from '../utils/pdfGenerator';
 import { MOFASS_CATEGORIES } from '../data/mofassQuestions';
@@ -54,14 +57,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   onBackToApp
 }) => {
   const [assessments, setAssessments] = useState<AssessmentResult[]>([]);
+  const [companies, setCompanies] = useState<RegisteredCompanyRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'list'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'list' | 'companies'>('dashboard');
   
   // Dashboard Sub-navigation for quick jumping
   const [dashboardSection, setDashboardSection] = useState<'all' | 'credit' | 'geo' | 'trend' | 'grants'>('all');
   
   // Table search & filters
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [companySearchQuery, setCompanySearchQuery] = useState<string>('');
   const [selectedSector, setSelectedSector] = useState<string>('ALL');
   const [selectedMaturity, setSelectedMaturity] = useState<string>('ALL');
   
@@ -83,10 +88,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await getAllAssessmentsAdmin();
-      setAssessments(data);
+      const [assessmentsData, companiesData] = await Promise.all([
+        getAllAssessmentsAdmin(),
+        getAllCompaniesAdmin()
+      ]);
+      setAssessments(assessmentsData);
+      setCompanies(companiesData);
     } catch (err) {
-      console.error('Failed to load admin assessments:', err);
+      console.error('Failed to load admin data:', err);
     } finally {
       setLoading(false);
     }
@@ -96,8 +105,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     if (!isAdmin) return;
 
     setLoading(true);
-    // Realtime Firestore onSnapshot + in-browser live subscription
-    const unsubscribe = subscribeAllAssessmentsAdmin((updatedList) => {
+    // Realtime Firestore onSnapshot + in-browser live subscription for Assessments
+    const unsubAssessments = subscribeAllAssessmentsAdmin((updatedList) => {
       if (prevCountRef.current !== null && updatedList.length > prevCountRef.current) {
         const latest = updatedList[0];
         showToast(`Laporan baharu diterima: ${latest.companyProfile?.companyName || 'Syarikat PMKS'} (${latest.id})!`, 'success');
@@ -107,8 +116,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       setLoading(false);
     });
 
+    // Realtime Firestore onSnapshot for Company Profiles
+    const unsubCompanies = subscribeAllCompaniesAdmin((updatedCompanies) => {
+      setCompanies(updatedCompanies);
+    });
+
     return () => {
-      unsubscribe();
+      unsubAssessments();
+      unsubCompanies();
     };
   }, [isAdmin]);
 
@@ -182,6 +197,25 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       return matchesSearch && matchesSector && matchesMaturity;
     });
   }, [assessments, searchQuery, selectedSector, selectedMaturity]);
+
+  // Filtered Registered PMKS Companies
+  const filteredCompanies = useMemo(() => {
+    return companies.filter((c) => {
+      const q = companySearchQuery.toLowerCase().trim();
+      const matchesSearch = 
+        !q ||
+        c.companyName?.toLowerCase().includes(q) ||
+        c.ssmNumber?.toLowerCase().includes(q) ||
+        c.userFullName?.toLowerCase().includes(q) ||
+        c.userEmail?.toLowerCase().includes(q) ||
+        c.userPhone?.toLowerCase().includes(q) ||
+        c.state?.toLowerCase().includes(q) ||
+        c.sector?.toLowerCase().includes(q);
+
+      const matchesSector = selectedSector === 'ALL' || c.sector === selectedSector;
+      return matchesSearch && matchesSector;
+    });
+  }, [companies, companySearchQuery, selectedSector]);
 
   // =========================================================================
   // ADVANCED ANALYTICS COMPUTATION
@@ -711,6 +745,23 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 activeTab === 'list' ? 'bg-slate-900 text-amber-300' : 'bg-slate-800 text-slate-300'
               }`}>
                 {assessments.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('companies')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                activeTab === 'companies'
+                  ? 'bg-amber-400 text-slate-950 shadow-md'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              <span>Profil Syarikat Berdaftar</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-extrabold ${
+                activeTab === 'companies' ? 'bg-slate-900 text-amber-300' : 'bg-slate-800 text-slate-300'
+              }`}>
+                {companies.length}
               </span>
             </button>
           </div>
@@ -1750,6 +1801,319 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 <div className="flex items-center gap-2 text-[11px] text-slate-400">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                   <span>Pengesyoran automatik berasaskan ML & piawaian MOFASS</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 3: PROFIL SYARIKAT PMKS BERDAFTAR                                    */}
+        {/* ========================================================================= */}
+        {activeTab === 'companies' && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Header / Summary Card */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Direktori Berpusat PMKS</span>
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                  Profil Syarikat PMKS Berdaftar
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-600 max-w-2xl leading-relaxed">
+                  Semua profil perniagaan dan maklumat usahawan yang diisi dalam sistem disegerakkan secara automatik ke pelayan Firestore secara masa nyata.
+                </p>
+              </div>
+
+              {/* Quick Summary Badges */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-2xl text-center">
+                  <div className="text-[10px] uppercase font-bold text-slate-400">Jumlah Syarikat</div>
+                  <div className="text-xl font-black text-slate-900">{companies.length}</div>
+                </div>
+                <div className="bg-emerald-50 border border-emerald-200 px-4 py-2.5 rounded-2xl text-center">
+                  <div className="text-[10px] uppercase font-bold text-emerald-700">Telah Buat Penilaian</div>
+                  <div className="text-xl font-black text-emerald-800">
+                    {companies.filter((c) => c.lastAssessmentId || assessments.some((a) => a.userId === c.userId || a.companyProfile?.companyName?.toLowerCase() === c.companyName?.toLowerCase())).length}
+                  </div>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 px-4 py-2.5 rounded-2xl text-center">
+                  <div className="text-[10px] uppercase font-bold text-amber-700">Menunggu Penilaian</div>
+                  <div className="text-xl font-black text-amber-800">
+                    {Math.max(0, companies.length - companies.filter((c) => c.lastAssessmentId || assessments.some((a) => a.userId === c.userId || a.companyProfile?.companyName?.toLowerCase() === c.companyName?.toLowerCase())).length)}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Filter & Search Bar */}
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3">
+                {/* Search Input */}
+                <div className="relative grow">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={companySearchQuery}
+                    onChange={(e) => setCompanySearchQuery(e.target.value)}
+                    placeholder="Cari nama syarikat, no SSM, nama pemilik, emel, no tel, atau negeri..."
+                    className="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 focus:border-indigo-500 rounded-xl outline-hidden font-medium transition"
+                  />
+                  {companySearchQuery && (
+                    <button
+                      onClick={() => setCompanySearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                    >
+                      Batal
+                    </button>
+                  )}
+                </div>
+
+                {/* Sektor Dropdown Filter */}
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-slate-500 shrink-0" />
+                  <select
+                    value={selectedSector}
+                    onChange={(e) => setSelectedSector(e.target.value)}
+                    className="px-3 py-2.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl outline-hidden focus:border-indigo-500 transition cursor-pointer"
+                  >
+                    <option value="ALL">Semua Sektor Perniagaan</option>
+                    <option value="Pembuatan / Pengilangan">Pembuatan / Pengilangan</option>
+                    <option value="Perkhidmatan (Services)">Perkhidmatan (Services)</option>
+                    <option value="Peruncitan & Pemborongan">Peruncitan & Pemborongan</option>
+                    <option value="Makanan & Minuman (F&B)">Makanan & Minuman (F&B)</option>
+                    <option value="Teknologi & Digital">Teknologi & Digital</option>
+                    <option value="Profesional & Konsultansi">Profesional & Konsultansi</option>
+                    <option value="Pertanian & Asas Tani">Pertanian & Asas Tani</option>
+                    <option value="Pembinaan & Kejuruteraan">Pembinaan & Kejuruteraan</option>
+                    <option value="Lain-lain">Lain-lain Sektor</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Companies Data View */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+              {/* Desktop Table View */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-900 text-white font-bold border-b border-slate-800">
+                      <th className="py-3.5 px-4 w-12 text-center text-[11px] uppercase tracking-wider text-slate-400">Bil</th>
+                      <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300">Syarikat & No SSM</th>
+                      <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300">Maklumat Usahawan</th>
+                      <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300">Sektor & Saiz</th>
+                      <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300">Kewangan & Pekerja</th>
+                      <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300">Lokasi</th>
+                      <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300 text-center">Status Penilaian</th>
+                      <th className="py-3.5 px-4 text-[11px] uppercase tracking-wider text-slate-300 text-center w-28">Tindakan</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredCompanies.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-slate-400">
+                          <Building2 className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                          <p className="font-bold text-slate-700">Tiada Profil Syarikat Dijumpai</p>
+                          <p className="text-[11px] text-slate-400 mt-1">
+                            {companySearchQuery ? 'Cuba ubah kata kunci carian atau tetapkan semula penapis sektor.' : 'Belum ada profil syarikat yang didaftarkan dalam sistem.'}
+                          </p>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredCompanies.map((c, idx) => {
+                        // Find matching assessment if any
+                        const matchingAssessment = assessments.find(
+                          (a) => a.id === c.lastAssessmentId || a.userId === c.userId || a.companyProfile?.companyName?.toLowerCase() === c.companyName?.toLowerCase()
+                        );
+
+                        return (
+                          <tr key={c.userId || idx} className="hover:bg-slate-50/80 transition group">
+                            <td className="py-3 px-4 text-center text-slate-400 font-bold text-[11px]">
+                              {idx + 1}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-bold text-slate-900 group-hover:text-indigo-600 transition">
+                                {c.companyName}
+                              </div>
+                              <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                                SSM: {c.ssmNumber || 'Tidak Dinyatakan'}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-medium text-slate-800">
+                                {c.userFullName || 'Usahawan PMKS'}
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                {c.userEmail || '-'}
+                              </div>
+                              {c.userPhone && (
+                                <div className="text-[10px] text-indigo-600 font-mono mt-0.5">
+                                  {c.userPhone}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="inline-block text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                                {c.sector}
+                              </span>
+                              <div className="text-[10px] text-slate-500 mt-0.5">
+                                {c.businessSize}
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="font-bold text-emerald-700">
+                                {c.annualTurnover || '-'}
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                {c.employeeCount ? `${c.employeeCount} orang pekerja` : '-'} • {c.yearsInOperation || 0} thn operasi
+                              </div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-1 text-slate-700 font-medium">
+                                <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                <span>{c.state || 'Malaysia'}</span>
+                              </div>
+                              {c.district && (
+                                <div className="text-[10px] text-slate-400 pl-4.5">
+                                  {c.district}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              {matchingAssessment ? (
+                                <div className="inline-flex flex-col items-center">
+                                  <span className="text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-full">
+                                    {matchingAssessment.overallPercentage}% • {matchingAssessment.maturityLevel}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 mt-0.5">
+                                    {formatReportDate(matchingAssessment.createdAt)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                                  Menunggu Penilaian
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              {matchingAssessment ? (
+                                <button
+                                  onClick={() => onViewAssessment(matchingAssessment)}
+                                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-xl shadow-xs transition"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>Laporan</span>
+                                </button>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 italic">Tiada Laporan</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile Card View (Optimized for Small Screens) */}
+              <div className="lg:hidden divide-y divide-slate-100 p-3 sm:p-4 space-y-4">
+                {filteredCompanies.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400">
+                    <Building2 className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                    <p className="font-bold text-slate-700">Tiada Profil Syarikat Dijumpai</p>
+                    <p className="text-xs text-slate-400 mt-1">Ubah kata kunci carian anda di atas.</p>
+                  </div>
+                ) : (
+                  filteredCompanies.map((c, idx) => {
+                    const matchingAssessment = assessments.find(
+                      (a) => a.id === c.lastAssessmentId || a.userId === c.userId || a.companyProfile?.companyName?.toLowerCase() === c.companyName?.toLowerCase()
+                    );
+
+                    return (
+                      <div key={c.userId || idx} className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                              #{idx + 1} • {c.sector}
+                            </span>
+                            <h3 className="text-sm font-extrabold text-slate-900 mt-1">
+                              {c.companyName}
+                            </h3>
+                            <div className="text-[11px] text-slate-500 font-mono">
+                              SSM: {c.ssmNumber || 'Tidak Dinyatakan'}
+                            </div>
+                          </div>
+
+                          {matchingAssessment ? (
+                            <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200 shrink-0">
+                              {matchingAssessment.overallPercentage}%
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 shrink-0">
+                              Belum Dinilai
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="bg-slate-50 p-2.5 rounded-xl text-xs space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500">Usahawan:</span>
+                            <span className="font-bold text-slate-800">{c.userFullName || 'Usahawan PMKS'}</span>
+                          </div>
+                          {c.userEmail && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-500">Emel:</span>
+                              <span className="text-slate-700 font-mono text-[11px] truncate max-w-[200px]">{c.userEmail}</span>
+                            </div>
+                          )}
+                          {c.userPhone && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-slate-500">No Tel:</span>
+                              <span className="text-indigo-600 font-mono font-bold text-[11px]">{c.userPhone}</span>
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500">Hasil Jualan:</span>
+                            <span className="font-bold text-emerald-700">{c.annualTurnover || '-'}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500">Pekerja & Pengalaman:</span>
+                            <span className="text-slate-700">{c.employeeCount || 0} pax • {c.yearsInOperation || 0} tahun</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-500">Negeri:</span>
+                            <span className="text-slate-800 font-medium">{c.state || '-'}</span>
+                          </div>
+                        </div>
+
+                        {matchingAssessment && (
+                          <button
+                            onClick={() => onViewAssessment(matchingAssessment)}
+                            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Lihat Laporan Penilaian Lengkap ({matchingAssessment.id})</span>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Table Footer info */}
+              <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+                <div>
+                  Menunjukkan <span className="font-bold text-slate-800">{filteredCompanies.length}</span> daripada <span className="font-bold text-slate-800">{companies.length}</span> jumlah profil syarikat berdaftar
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Data berpusat masa nyata Firestore</span>
                 </div>
               </div>
             </div>

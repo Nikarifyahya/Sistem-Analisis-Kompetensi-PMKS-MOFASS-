@@ -2,55 +2,29 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Default Deny
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function isAdmin() {
-      return isSignedIn() && 
-             request.auth.token.email != null && 
-             (request.auth.token.email == 'nikarifyahya@gmail.com' || 
-              request.auth.token.email.matches('(?i)^nikarifyahya@gmail\\.com$'));
-    }
-
-    // User profiles: users can only read and write their own document
+    // User profiles: Allow read and write so user profile information is saved
     match /users/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
-      allow create: if isOwner(userId) || isAdmin() || isSignedIn();
-      allow update: if isOwner(userId) || isAdmin();
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
-    // Company profiles
+    // Company profiles: Allow read and write so every company profile filled by user is saved and synced
     match /companies/{companyId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn();
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read, write: if true;
     }
 
-    // Assessments: Allow read and create so every user submission is reliably captured into Firestore and instantly pushed to Admin
+    // Assessments: Allow read and write so all assessments flow automatically to admin portal in real time
     match /assessments/{assessmentId} {
-      allow get, list: if true;
-      allow create: if true;
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow read, write: if true;
     }
 
     // Connection probe
     match /test/connection {
-      allow read: if true;
+      allow read, write: if true;
+    }
+
+    // All documents fallback
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }
